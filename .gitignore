@@ -1,0 +1,15 @@
+# npm
+node_modules/
+npm-debug.log*
+
+# build output — released via GitHub releases, not the repo
+main.js
+*.map
+
+# obsidian runtime data (settings live in the vault, not the repo)
+data.json
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
