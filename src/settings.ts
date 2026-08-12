@@ -1,15 +1,13 @@
-import { normalizePath, PluginSettingTab, Setting, type App } from 'obsidian';
+import { PluginSettingTab, Setting, type App } from 'obsidian';
 import type RememberPlugin from './main';
 
 export interface RememberSettings {
 	deckProperty: string;
-	logFolder: string;
 	desiredRetention: number;
 }
 
 export const DEFAULT_SETTINGS: RememberSettings = {
 	deckProperty: 'deck',
-	logFolder: '_remember',
 	desiredRetention: 0.9,
 };
 
@@ -30,16 +28,6 @@ export class RememberSettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text.setValue(this.plugin.settings.deckProperty).onChange(async (value) => {
 					this.plugin.settings.deckProperty = value.trim() || DEFAULT_SETTINGS.deckProperty;
-					await this.plugin.saveSettings();
-				}),
-			);
-
-		new Setting(this.containerEl)
-			.setName('Log folder')
-			.setDesc('Vault folder holding the reviews-*.jsonl event logs.')
-			.addText((text) =>
-				text.setValue(this.plugin.settings.logFolder).onChange(async (value) => {
-					this.plugin.settings.logFolder = value.trim() === '' ? DEFAULT_SETTINGS.logFolder : normalizePath(value.trim());
 					await this.plugin.saveSettings();
 				}),
 			);

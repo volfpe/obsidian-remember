@@ -6,6 +6,7 @@ import type { LogEvent, ReviewEvent } from './core/events';
 import { randomId } from './core/id';
 
 const DEVICE_ID_KEY = 'remember-device-id';
+const LOG_FOLDER_NAME = 'remember';
 
 /** Device-local (localStorage never syncs). Losing it is harmless: a new log starts, old ones keep being read. */
 export function getDeviceId(app: App): string {
@@ -20,29 +21,33 @@ function ownLogName(app: App): string {
 	return `reviews-${getDeviceId(app)}.jsonl`;
 }
 
-function ownLogPath(app: App, folder: string): string {
-	return normalizePath(`${folder}/${ownLogName(app)}`);
+export function logFolderPath(app: App): string {
+	return normalizePath(`${app.vault.configDir}/${LOG_FOLDER_NAME}`);
+}
+
+function ownLogPath(app: App): string {
+	return normalizePath(`${logFolderPath(app)}/${ownLogName(app)}`);
 }
 
 /** True append via the adapter — no read-modify-write. Creates the log folder on demand. */
-export async function appendEvent(app: App, folder: string, event: ReviewEvent): Promise<void> {
-	await appendLogEvent(app, folder, event);
+export async function appendEvent(app: App, event: ReviewEvent): Promise<void> {
+	await appendLogEvent(app, event);
 }
 
 /** Appends a tombstone for a review. The original event remains in the log. */
-export async function appendUndoEvent(app: App, folder: string, reviewId: string): Promise<void> {
-	await appendLogEvent(app, folder, { v: 1, k: 'u', t: new Date().toISOString(), u: reviewId });
+export async function appendUndoEvent(app: App, reviewId: string): Promise<void> {
+	await appendLogEvent(app, { v: 1, k: 'u', t: new Date().toISOString(), u: reviewId });
 }
 
-async function appendLogEvent(app: App, folder: string, event: LogEvent): Promise<void> {
-	await ensureFolder(app, folder);
-	await app.vault.adapter.append(ownLogPath(app, folder), JSON.stringify(event) + '\n');
+async function appendLogEvent(app: App, event: LogEvent): Promise<void> {
+	await ensureFolder(app, logFolderPath(app));
+	await app.vault.adapter.append(ownLogPath(app), JSON.stringify(event) + '\n');
 }
 
 /** Active reviews across every device's log. Undo tombstones are applied independent of file order. */
-export async function readEvents(app: App, folder: string): Promise<ReviewEvent[]> {
+export async function readEvents(app: App): Promise<ReviewEvent[]> {
 	const adapter = app.vault.adapter;
-	const dir = normalizePath(folder);
+	const dir = logFolderPath(app);
 	if (!(await adapter.exists(dir))) return [];
 	const seenReviews = new Set<string>();
 	const reviews: ReviewEvent[] = [];
@@ -79,9 +84,9 @@ export async function readEvents(app: App, folder: string): Promise<ReviewEvent[
  * Merges sync-conflict copies of the own device's log back into it and deletes them.
  * Safe: this device is the only writer of both. Copies of other devices' files are left alone.
  */
-export async function cleanOwnConflictCopies(app: App, folder: string): Promise<void> {
+export async function cleanOwnConflictCopies(app: App): Promise<void> {
 	const adapter = app.vault.adapter;
-	const dir = normalizePath(folder);
+	const dir = logFolderPath(app);
 	if (!(await adapter.exists(dir))) return;
 	const own = ownLogName(app);
 	const prefix = own.slice(0, -'.jsonl'.length);
@@ -91,7 +96,7 @@ export async function cleanOwnConflictCopies(app: App, folder: string): Promise<
 	});
 	if (copies.length === 0) return;
 
-	const ownPath = ownLogPath(app, folder);
+	const ownPath = ownLogPath(app);
 	const ownLines = new Set(
 		(await adapter.exists(ownPath)) ? (await adapter.read(ownPath)).split('\n').filter((line) => line.trim() !== '') : [],
 	);

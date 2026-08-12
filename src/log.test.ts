@@ -1,9 +1,8 @@
 import { App } from 'obsidian-test-mocks/obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReviewEvent } from './core/events';
-import { appendEvent, appendUndoEvent, cleanOwnConflictCopies, getDeviceId, readEvents } from './log';
+import { appendEvent, appendUndoEvent, cleanOwnConflictCopies, getDeviceId, logFolderPath, readEvents } from './log';
 
-const folder = '_remember';
 const deviceId = 'device0000001';
 
 function event(t: string, c: string, r: 1 | 2 | 3 | 4 = 3): ReviewEvent {
@@ -23,6 +22,13 @@ function appWithFiles(files: Record<string, string> = {}) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('device id and append', () => {
+	it('uses the active vault configuration folder', () => {
+		const app = appWithFiles();
+		app.vault.configDir = '.obsidian-mobile';
+
+		expect(logFolderPath(app)).toBe('.obsidian-mobile/remember');
+	});
+
 	it('mints once and persists the device id in Obsidian local storage', () => {
 		const mockApp = App.createConfigured__();
 		const app = mockApp.asOriginalType__();
@@ -37,8 +43,9 @@ describe('device id and append', () => {
 	it('creates the folder and appends one complete JSON line', async () => {
 		const app = appWithFiles();
 		const review = event('2026-08-11T09:14:03.120Z', 'card1');
+		const folder = logFolderPath(app);
 
-		await appendEvent(app, folder, review);
+		await appendEvent(app, review);
 
 		expect(await app.vault.adapter.read(`${folder}/reviews-${deviceId}.jsonl`)).toBe(jsonl(review));
 	});
@@ -48,14 +55,16 @@ describe('readEvents', () => {
 	it('reads every review log, skips one malformed line, and deduplicates events', async () => {
 		const first = event('2026-08-11T09:14:03.120Z', 'card1');
 		const second = event('2026-08-11T09:15:03.120Z', 'card2', 1);
-		const app = appWithFiles({
+		const app = appWithFiles();
+		const folder = logFolderPath(app);
+		for (const [path, content] of Object.entries({
 			[`${folder}/reviews-a.jsonl`]: `${jsonl(first)}not json\n`,
 			[`${folder}/reviews-b conflict.jsonl`]: jsonl(first, second),
 			[`${folder}/unrelated.jsonl`]: jsonl(event('2026-08-11T09:16:03.120Z', 'ignored')),
-		});
+		})) await app.vault.adapter.write(path, content);
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		const reviews = await readEvents(app, folder);
+		const reviews = await readEvents(app);
 
 		expect(reviews).toEqual([first, second]);
 		expect(warning).toHaveBeenCalledOnce();
@@ -67,17 +76,19 @@ describe('conflict cleanup', () => {
 		const first = event('2026-08-11T09:14:03.120Z', 'card1');
 		const second = event('2026-08-11T09:15:03.120Z', 'card2');
 		const other = event('2026-08-11T09:16:03.120Z', 'card3');
+		const app = appWithFiles();
+		const folder = logFolderPath(app);
 		const ownPath = `${folder}/reviews-${deviceId}.jsonl`;
 		const conflictPath = `${folder}/reviews-${deviceId} (conflict).jsonl`;
 		const otherPath = `${folder}/reviews-otherdevice1.jsonl`;
-		const app = appWithFiles({
+		for (const [path, content] of Object.entries({
 			[ownPath]: jsonl(first),
 			[conflictPath]: jsonl(first, second),
 			[otherPath]: jsonl(other),
-		});
+		})) await app.vault.adapter.write(path, content);
 		vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-		await cleanOwnConflictCopies(app, folder);
+		await cleanOwnConflictCopies(app);
 
 		expect(await app.vault.adapter.read(ownPath)).toBe(jsonl(first, second));
 		expect(await app.vault.adapter.exists(conflictPath)).toBe(false);
@@ -89,14 +100,16 @@ describe('append-only undo', () => {
 	it('appends a tombstone and excludes its review when logs are read', async () => {
 		const first = event('2026-08-11T09:14:03.120Z', 'card1');
 		const second = event('2026-08-11T09:15:03.120Z', 'card2');
+		const app = appWithFiles();
+		const folder = logFolderPath(app);
 		const path = `${folder}/reviews-${deviceId}.jsonl`;
-		const app = appWithFiles({ [path]: jsonl(first, second) });
+		await app.vault.adapter.write(path, jsonl(first, second));
 
-		await appendUndoEvent(app, folder, first.i);
+		await appendUndoEvent(app, first.i);
 
 		const lines = (await app.vault.adapter.read(path)).trim().split('\n');
 		expect(lines).toHaveLength(3);
 		expect(JSON.parse(lines[2])).toMatchObject({ v: 1, k: 'u', u: first.i });
-		expect(await readEvents(app, folder)).toEqual([second]);
+		expect(await readEvents(app)).toEqual([second]);
 	});
 });

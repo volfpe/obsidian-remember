@@ -43,4 +43,4 @@ Run **Remember: Review**, choose a deck, reveal each answer, and rate it.
 Remember stores all data locally in your vault.
 
 - When a review session starts, Remember adds hidden `%%rem:<id>%%` comments to unstamped cards.
-- Review history is stored as per-device `reviews-*.jsonl` files in `_remember` by default. You can change this folder in the plugin settings.
+- Review history is stored as per-device `reviews-*.jsonl` files in the vault's hidden configuration folder under `remember/`.

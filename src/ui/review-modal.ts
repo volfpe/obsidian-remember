@@ -84,7 +84,7 @@ export class ReviewModal extends Modal {
 			});
 			return;
 		}
-		const states = foldEvents(this.fsrs, await readEvents(this.app, this.settings.logFolder));
+		const states = foldEvents(this.fsrs, await readEvents(this.app));
 		const now = new Date();
 
 		const listEl = this.contentEl.createDiv({ cls: 'remember-decks' });
@@ -183,7 +183,7 @@ export class ReviewModal extends Modal {
 
 		const selection = selectCards([...allByPath.values()].flat(), deck);
 		this.reportDuplicates(selection.dropped);
-		const states = foldEvents(this.fsrs, await readEvents(this.app, this.settings.logFolder));
+		const states = foldEvents(this.fsrs, await readEvents(this.app));
 		this.queue = buildQueue(selection.kept, states, new Date());
 		this.undoStack = [];
 		this.setTitle(deck);
@@ -270,7 +270,7 @@ export class ReviewModal extends Modal {
 				dr: this.fsrs.parameters.request_retention,
 			};
 			try {
-				await appendEvent(this.app, this.settings.logFolder, event);
+				await appendEvent(this.app, event);
 			} catch (error) {
 				// A review is never silently lost: no advance, the session pauses on this card.
 				new Notice(`Remember: could not save the review — ${String(error)}`);
@@ -297,7 +297,7 @@ export class ReviewModal extends Modal {
 		this.busy = true;
 		try {
 			try {
-				await appendUndoEvent(this.app, this.settings.logFolder, entry.event.i);
+				await appendUndoEvent(this.app, entry.event.i);
 			} catch (error) {
 				console.warn('Remember: undo failed', error);
 				new Notice(`Remember: could not save the undo — ${String(error)}`);

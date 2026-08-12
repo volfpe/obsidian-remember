@@ -35,7 +35,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 function makeHarness(): { app: ReturnType<App['asOriginalType__']>; modal: ReviewModalHarness } {
-	const mockApp = App.createConfigured__({ files: { '_remember/': '', 'note.md': 'q::a' } });
+	const mockApp = App.createConfigured__({ files: { 'note.md': 'q::a' } });
 	mockApp.saveLocalStorage('remember-device-id', 'device0000001');
 	const app = mockApp.asOriginalType__();
 	const modal = new ReviewModal(app, { ...DEFAULT_SETTINGS }) as unknown as ReviewModalHarness;

@@ -14,7 +14,7 @@ export default class RememberPlugin extends Plugin {
 		this.addSettingTab(new RememberSettingTab(this.app, this));
 		this.registerEditorExtension(hideTokens);
 		this.app.workspace.onLayoutReady(() => {
-			cleanOwnConflictCopies(this.app, this.settings.logFolder).catch((error) =>
+			cleanOwnConflictCopies(this.app).catch((error) =>
 				console.error('Remember: sync-conflict cleanup failed', error),
 			);
 		});
@@ -38,7 +38,6 @@ function parseSettings(value: unknown): RememberSettings {
 	const stored = value as Record<string, unknown>;
 	return {
 		deckProperty: typeof stored.deckProperty === 'string' ? stored.deckProperty : DEFAULT_SETTINGS.deckProperty,
-		logFolder: typeof stored.logFolder === 'string' ? stored.logFolder : DEFAULT_SETTINGS.logFolder,
 		desiredRetention:
 			typeof stored.desiredRetention === 'number' &&
 			Number.isFinite(stored.desiredRetention) &&
