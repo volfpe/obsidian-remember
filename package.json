@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-remember",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"description": "Minimal, durable spaced repetition inside Obsidian.",
 	"main": "main.js",
 	"scripts": {
@@ -13,7 +13,12 @@
 		"test": "vitest run",
 		"version": "node scripts/version-bump.mjs"
 	},
-	"keywords": ["obsidian", "flashcards", "fsrs", "spaced-repetition"],
+	"keywords": [
+		"obsidian",
+		"flashcards",
+		"fsrs",
+		"spaced-repetition"
+	],
 	"license": "MIT",
 	"dependencies": {
 		"ts-fsrs": "^5.2.1"
