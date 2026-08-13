@@ -1,12 +1,12 @@
-// Device id + the per-device append-only event logs (reviews-<deviceId>.jsonl).
+// Device id + the per-device append-only event logs (reviews-<deviceId>.rememberlog).
 // These logs are the only scheduling store: no snapshot, no cache file, no database.
 
-import { normalizePath, type App } from 'obsidian';
+import type { App } from 'obsidian';
 import type { LogEvent, ReviewEvent } from './core/events';
 import { randomId } from './core/id';
 
 const DEVICE_ID_KEY = 'remember-device-id';
-const LOG_FOLDER_NAME = 'remember';
+const LOG_EXTENSION = '.rememberlog';
 
 /** Device-local (localStorage never syncs). Losing it is harmless: a new log starts, old ones keep being read. */
 export function getDeviceId(app: App): string {
@@ -18,18 +18,14 @@ export function getDeviceId(app: App): string {
 }
 
 function ownLogName(app: App): string {
-	return `reviews-${getDeviceId(app)}.jsonl`;
-}
-
-export function logFolderPath(app: App): string {
-	return normalizePath(`${app.vault.configDir}/${LOG_FOLDER_NAME}`);
+	return `reviews-${getDeviceId(app)}${LOG_EXTENSION}`;
 }
 
 function ownLogPath(app: App): string {
-	return normalizePath(`${logFolderPath(app)}/${ownLogName(app)}`);
+	return ownLogName(app);
 }
 
-/** True append via the adapter — no read-modify-write. Creates the log folder on demand. */
+/** True append via the adapter — no read-modify-write. */
 export async function appendEvent(app: App, event: ReviewEvent): Promise<void> {
 	await appendLogEvent(app, event);
 }
@@ -40,19 +36,16 @@ export async function appendUndoEvent(app: App, reviewId: string): Promise<void>
 }
 
 async function appendLogEvent(app: App, event: LogEvent): Promise<void> {
-	await ensureFolder(app, logFolderPath(app));
 	await app.vault.adapter.append(ownLogPath(app), JSON.stringify(event) + '\n');
 }
 
 /** Active reviews across every device's log. Undo tombstones are applied independent of file order. */
 export async function readEvents(app: App): Promise<ReviewEvent[]> {
 	const adapter = app.vault.adapter;
-	const dir = logFolderPath(app);
-	if (!(await adapter.exists(dir))) return [];
 	const seenReviews = new Set<string>();
 	const reviews: ReviewEvent[] = [];
 	const undone = new Set<string>();
-	for (const path of (await adapter.list(dir)).files) {
+	for (const path of (await adapter.list('')).files) {
 		if (!isLogFile(baseName(path))) continue;
 		let content: string;
 		try {
@@ -86,11 +79,9 @@ export async function readEvents(app: App): Promise<ReviewEvent[]> {
  */
 export async function cleanOwnConflictCopies(app: App): Promise<void> {
 	const adapter = app.vault.adapter;
-	const dir = logFolderPath(app);
-	if (!(await adapter.exists(dir))) return;
 	const own = ownLogName(app);
-	const prefix = own.slice(0, -'.jsonl'.length);
-	const copies = (await adapter.list(dir)).files.filter((path) => {
+	const prefix = own.slice(0, -LOG_EXTENSION.length);
+	const copies = (await adapter.list('')).files.filter((path) => {
 		const name = baseName(path);
 		return isLogFile(name) && name !== own && name.startsWith(prefix);
 	});
@@ -110,20 +101,12 @@ export async function cleanOwnConflictCopies(app: App): Promise<void> {
 	}
 }
 
-async function ensureFolder(app: App, folder: string): Promise<void> {
-	let path = '';
-	for (const part of normalizePath(folder).split('/')) {
-		path = path === '' ? part : `${path}/${part}`;
-		if (!(await app.vault.adapter.exists(path))) await app.vault.adapter.mkdir(path);
-	}
-}
-
 function baseName(path: string): string {
 	return path.slice(path.lastIndexOf('/') + 1);
 }
 
 function isLogFile(name: string): boolean {
-	return name.startsWith('reviews-') && name.endsWith('.jsonl');
+	return name.startsWith('reviews-') && name.endsWith(LOG_EXTENSION);
 }
 
 function parseLogEventLine(line: string): LogEvent | null {

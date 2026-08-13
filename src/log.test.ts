@@ -1,7 +1,7 @@
 import { App } from 'obsidian-test-mocks/obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReviewEvent } from './core/events';
-import { appendEvent, appendUndoEvent, cleanOwnConflictCopies, getDeviceId, logFolderPath, readEvents } from './log';
+import { appendEvent, appendUndoEvent, cleanOwnConflictCopies, getDeviceId, readEvents } from './log';
 
 const deviceId = 'device0000001';
 
@@ -22,13 +22,6 @@ function appWithFiles(files: Record<string, string> = {}) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('device id and append', () => {
-	it('uses the active vault configuration folder', () => {
-		const app = appWithFiles();
-		app.vault.configDir = '.obsidian-mobile';
-
-		expect(logFolderPath(app)).toBe('.obsidian-mobile/remember');
-	});
-
 	it('mints once and persists the device id in Obsidian local storage', () => {
 		const mockApp = App.createConfigured__();
 		const app = mockApp.asOriginalType__();
@@ -40,14 +33,13 @@ describe('device id and append', () => {
 		expect(mockApp.loadLocalStorage('remember-device-id')).toBe(first);
 	});
 
-	it('creates the folder and appends one complete JSON line', async () => {
+	it('appends one complete JSON line to its root-level device log', async () => {
 		const app = appWithFiles();
 		const review = event('2026-08-11T09:14:03.120Z', 'card1');
-		const folder = logFolderPath(app);
 
 		await appendEvent(app, review);
 
-		expect(await app.vault.adapter.read(`${folder}/reviews-${deviceId}.jsonl`)).toBe(jsonl(review));
+		expect(await app.vault.adapter.read(`reviews-${deviceId}.rememberlog`)).toBe(jsonl(review));
 	});
 });
 
@@ -56,11 +48,10 @@ describe('readEvents', () => {
 		const first = event('2026-08-11T09:14:03.120Z', 'card1');
 		const second = event('2026-08-11T09:15:03.120Z', 'card2', 1);
 		const app = appWithFiles();
-		const folder = logFolderPath(app);
 		for (const [path, content] of Object.entries({
-			[`${folder}/reviews-a.jsonl`]: `${jsonl(first)}not json\n`,
-			[`${folder}/reviews-b conflict.jsonl`]: jsonl(first, second),
-			[`${folder}/unrelated.jsonl`]: jsonl(event('2026-08-11T09:16:03.120Z', 'ignored')),
+			'reviews-a.rememberlog': `${jsonl(first)}not json\n`,
+			'reviews-b conflict.rememberlog': jsonl(first, second),
+			'unrelated.rememberlog': jsonl(event('2026-08-11T09:16:03.120Z', 'ignored')),
 		})) await app.vault.adapter.write(path, content);
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
@@ -77,10 +68,9 @@ describe('conflict cleanup', () => {
 		const second = event('2026-08-11T09:15:03.120Z', 'card2');
 		const other = event('2026-08-11T09:16:03.120Z', 'card3');
 		const app = appWithFiles();
-		const folder = logFolderPath(app);
-		const ownPath = `${folder}/reviews-${deviceId}.jsonl`;
-		const conflictPath = `${folder}/reviews-${deviceId} (conflict).jsonl`;
-		const otherPath = `${folder}/reviews-otherdevice1.jsonl`;
+		const ownPath = `reviews-${deviceId}.rememberlog`;
+		const conflictPath = `reviews-${deviceId} (conflict).rememberlog`;
+		const otherPath = 'reviews-otherdevice1.rememberlog';
 		for (const [path, content] of Object.entries({
 			[ownPath]: jsonl(first),
 			[conflictPath]: jsonl(first, second),
@@ -101,8 +91,7 @@ describe('append-only undo', () => {
 		const first = event('2026-08-11T09:14:03.120Z', 'card1');
 		const second = event('2026-08-11T09:15:03.120Z', 'card2');
 		const app = appWithFiles();
-		const folder = logFolderPath(app);
-		const path = `${folder}/reviews-${deviceId}.jsonl`;
+		const path = `reviews-${deviceId}.rememberlog`;
 		await app.vault.adapter.write(path, jsonl(first, second));
 
 		await appendUndoEvent(app, first.i);
