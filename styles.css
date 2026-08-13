@@ -22,18 +22,16 @@
 	padding: 0;
 }
 
-.is-mobile .remember-modal,
-.is-phone .remember-modal {
+.is-mobile .modal-container .remember-modal.remember-modal,
+.is-phone .modal-container .remember-modal.remember-modal {
 	box-sizing: border-box;
-	width: 100vw !important;
-	height: 100vh !important;
-	max-width: none !important;
-	max-height: none !important;
+	width: 100vw;
+	height: 100vh;
+	max-width: none;
+	max-height: none;
 	border-radius: 0;
-	padding-top: var(--safe-area-inset-top, 0px);
-	padding-right: var(--safe-area-inset-right, 0px);
-	padding-bottom: var(--safe-area-inset-bottom, 0px);
-	padding-left: var(--safe-area-inset-left, 0px);
+	padding: var(--safe-area-inset-top, 0) var(--safe-area-inset-right, 0)
+		var(--safe-area-inset-bottom, 0) var(--safe-area-inset-left, 0);
 }
 
 /* deck list */
@@ -77,12 +75,12 @@ button.remember-deck-row:not(:disabled) {
 	cursor: pointer;
 }
 
-button.remember-deck-row:hover:not(:disabled) {
-	background: var(--background-modifier-hover);
-}
-
 button.remember-deck-row:disabled {
 	opacity: 0.5;
+}
+
+button.remember-deck-row:hover:not(:disabled) {
+	background: var(--background-modifier-hover);
 }
 
 .remember-deck-name {
@@ -251,13 +249,13 @@ button.remember-undo:focus-visible {
 	opacity: 1;
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
 	.remember-card-scroll {
 		padding: 10px 12px;
 	}
 
 	.remember-footer {
-		padding: 8px 10px max(8px, var(--safe-area-inset-bottom, 0px));
+		padding: 8px 10px max(8px, var(--safe-area-inset-bottom, 0));
 	}
 
 	.remember-rating-buttons {

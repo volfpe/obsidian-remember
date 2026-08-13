@@ -7,6 +7,7 @@ export default defineConfig(
 		'node_modules',
 		'dist',
 		'esbuild.config.mjs',
+		'stylelint.config.mjs',
 		'versions.json',
 		'main.js',
 		'package.json',
@@ -28,11 +29,4 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
-	// Declarative settings require Obsidian 1.13; Remember supports 1.8.7 and uses display() for compatibility.
-	{
-		files: ['src/settings.ts'],
-		rules: {
-			'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
-		},
-	},
 );

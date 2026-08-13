@@ -1,4 +1,4 @@
-import { PluginSettingTab, Setting, type App } from 'obsidian';
+import { PluginSettingTab, type App, type SettingDefinitionItem } from 'obsidian';
 import type RememberPlugin from './main';
 
 export interface RememberSettings {
@@ -19,30 +19,45 @@ export class RememberSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
-	display(): void {
-		this.containerEl.empty();
-
-		new Setting(this.containerEl)
-			.setName('Deck property name')
-			.setDesc('Frontmatter property that assigns a note to a deck, e.g. "deck: lang/spanish".')
-			.addText((text) =>
-				text.setValue(this.plugin.settings.deckProperty).onChange(async (value) => {
-					this.plugin.settings.deckProperty = value.trim() || DEFAULT_SETTINGS.deckProperty;
-					await this.plugin.saveSettings();
-				}),
-			);
-
-		new Setting(this.containerEl)
-			.setName('Desired retention')
-			.setDesc('Fsrs target recall probability. Higher means shorter intervals.')
-			.addSlider((slider) =>
-				slider
-					.setLimits(0.7, 0.99, 0.01)
-					.setValue(this.plugin.settings.desiredRetention)
-					.onChange(async (value) => {
-						this.plugin.settings.desiredRetention = value;
-						await this.plugin.saveSettings();
-					}),
-			);
+	getSettingDefinitions(): SettingDefinitionItem<keyof RememberSettings>[] {
+		return [
+			{
+				name: 'Deck property name',
+				desc: 'Frontmatter property that assigns a note to a deck, e.g. "deck: lang/spanish".',
+				control: {
+					type: 'text',
+					key: 'deckProperty',
+					defaultValue: DEFAULT_SETTINGS.deckProperty,
+				},
+			},
+			{
+				name: 'Desired retention',
+				desc: 'Fsrs target recall probability. Higher means shorter intervals.',
+				control: {
+					type: 'slider',
+					key: 'desiredRetention',
+					defaultValue: DEFAULT_SETTINGS.desiredRetention,
+					min: 0.7,
+					max: 0.99,
+					step: 0.01,
+				},
+			},
+		];
 	}
+
+	override getControlValue(key: keyof RememberSettings): unknown {
+		return this.plugin.settings[key];
+	}
+
+	override async setControlValue(key: keyof RememberSettings, value: unknown): Promise<void> {
+		if (key === 'deckProperty' && typeof value === 'string') {
+			this.plugin.settings.deckProperty = value.trim() || DEFAULT_SETTINGS.deckProperty;
+		} else if (key === 'desiredRetention' && typeof value === 'number') {
+			this.plugin.settings.desiredRetention = value;
+		} else {
+			return;
+		}
+		await this.plugin.saveSettings();
+	}
+
 }
