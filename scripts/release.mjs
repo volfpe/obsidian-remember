@@ -29,7 +29,6 @@ exec('gh', [
 	'styles.css',
 	'--title',
 	version,
-	'--draft',
 	'--generate-notes',
 ]);
 
