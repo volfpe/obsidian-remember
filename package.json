@@ -9,7 +9,9 @@
 		"lint": "npm run lint:code && npm run lint:css",
 		"lint:code": "eslint .",
 		"lint:css": "stylelint \"**/*.css\"",
-		"test": "vitest run"
+		"release": "node scripts/release.mjs",
+		"test": "vitest run",
+		"version": "node scripts/version-bump.mjs"
 	},
 	"keywords": ["obsidian", "flashcards", "fsrs", "spaced-repetition"],
 	"license": "MIT",

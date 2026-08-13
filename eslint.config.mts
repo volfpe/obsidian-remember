@@ -21,7 +21,7 @@ export default defineConfig(
 			},
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'vitest.config.ts'],
+					allowDefaultProject: ['eslint.config.mts', 'manifest.json', 'scripts/*.mjs', 'vitest.config.ts'],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],
@@ -29,4 +29,11 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		files: ['scripts/*.mjs'],
+		rules: {
+			'obsidianmd/no-nodejs-modules': 'off',
+			'obsidianmd/rule-custom-message': 'off',
+		},
+	},
 );
