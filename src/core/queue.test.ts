@@ -1,7 +1,15 @@
 import { Rating } from 'ts-fsrs';
 import { describe, expect, it } from 'vitest';
 import type { ReviewEvent } from './events';
-import { buildQueue, countDeckStats, dedupeById, isDescendantDeck, selectCards, type NoteCard } from './queue';
+import {
+	buildQueue,
+	countDeckStats,
+	dedupeById,
+	introducedTodaySiblingKeys,
+	isDescendantDeck,
+	selectCards,
+	type NoteCard,
+} from './queue';
 import { applyRating, foldEvents, makeFsrs } from './scheduler';
 
 const f = makeFsrs(0.9);
@@ -60,7 +68,7 @@ describe('dedupeById', () => {
 describe('countDeckStats', () => {
 	it('counts unstamped and never-reviewed siblings as new, reversed cards twice', () => {
 		const counts = countDeckStats([card(null), card('a', { reversed: true })], new Map(), now);
-		expect(counts).toEqual({ due: 0, new: 3, total: 3 });
+		expect(counts).toEqual({ due: 0, new: 3, waiting: 0, total: 3 });
 	});
 
 	it('counts a past due as due and a future due as neither', () => {
@@ -69,7 +77,62 @@ describe('countDeckStats', () => {
 			['past', '2026-01-08T12:00:00.000Z'],
 			['future', '2026-01-10T11:59:00.000Z'],
 		]);
-		expect(countDeckStats([card('past'), card('future')], states, now)).toEqual({ due: 1, new: 0, total: 2 });
+		expect(countDeckStats([card('past'), card('future')], states, now)).toEqual({
+			due: 1,
+			new: 0,
+			waiting: 0,
+			total: 2,
+		});
+	});
+
+	it('subtracts introductions in the selected deck from the daily allowance', () => {
+		const events: ReviewEvent[] = ['introduced-a', 'introduced-b'].map((c, index) => ({
+			v: 1,
+			k: 'r',
+			i: `review-${index}`,
+			t: new Date(2026, 0, 10, 9, index).toISOString(),
+			c,
+			s: 0,
+			r: Rating.Good,
+			dr: 0.9,
+		}));
+		const localNow = new Date(2026, 0, 10, 12);
+		const states = foldEvents(f, events);
+		const cards = [card('introduced-a'), card('introduced-b'), card('fresh-a'), card('fresh-b'), card('fresh-c')];
+
+		expect(countDeckStats(cards, states, localNow, introducedTodaySiblingKeys(events, localNow), 3)).toEqual({
+			due: 2,
+			new: 1,
+			waiting: 2,
+			total: 5,
+		});
+	});
+});
+
+describe('introducedTodaySiblingKeys', () => {
+	it('counts only siblings whose first active review occurred on the local day', () => {
+		const localNow = new Date(2026, 0, 10, 12);
+		const event = (i: string, c: string, sub: number, when: Date): ReviewEvent => ({
+			v: 1,
+			k: 'r',
+			i,
+			t: when.toISOString(),
+			c,
+			s: sub,
+			r: Rating.Good,
+			dr: 0.9,
+		});
+		const introduced = introducedTodaySiblingKeys(
+			[
+				event('old-first', 'old', 0, new Date(2026, 0, 9, 9)),
+				event('old-again', 'old', 0, new Date(2026, 0, 10, 9)),
+				event('forward', 'reversed', 0, new Date(2026, 0, 10, 10)),
+				event('reverse', 'reversed', 1, new Date(2026, 0, 10, 11)),
+			],
+			localNow,
+		);
+
+		expect([...introduced].sort()).toEqual(['reversed#0', 'reversed#1']);
 	});
 });
 
@@ -104,6 +167,23 @@ describe('buildQueue', () => {
 		const cards = Array.from({ length: 10 }, (_, i) => card(`c${i}`));
 		const firsts = new Set(Array.from({ length: 20 }, () => buildQueue(cards, new Map(), now)[0].cardId));
 		expect(firsts.size).toBeGreaterThan(1);
+	});
+
+	it('limits only new cards and selects the same oldest cohort on every build', () => {
+		const states = statesAfterGood([['due', '2026-01-05T12:00:00.000Z']]);
+		const cards = [card('due'), ...Array.from({ length: 10 }, (_, i) => card(`new-${i}`))];
+		const first = buildQueue(cards, states, now, 3);
+		const tomorrow = new Date(now);
+		tomorrow.setDate(tomorrow.getDate() + 1);
+		const second = buildQueue([...cards].reverse(), states, tomorrow, 3);
+
+		expect(first[0].cardId).toBe('due');
+		expect(second[0].cardId).toBe('due');
+		expect(first).toHaveLength(4);
+		expect(second).toHaveLength(4);
+		const selected = first.slice(1).map((item) => item.cardId).sort();
+		expect(selected).toEqual(['new-0', 'new-1', 'new-2']);
+		expect(second.slice(1).map((item) => item.cardId).sort()).toEqual(selected);
 	});
 
 	it('applies one rating per sibling only (a rated forward leaves the reverse new)', () => {

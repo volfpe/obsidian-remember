@@ -63,7 +63,7 @@ describe('stampText', () => {
 
 		const [card] = parseCards(stamped);
 		expect(card).toMatchObject({ front: 'fresh', back: 'card' });
-		expect(card?.id).toMatch(/^[0-9a-z]{13}$/);
+		expect(card?.id).toMatch(/^[0-9a-z]{16}$/);
 		expect(await app.vault.read(file)).toBe(stamped);
 	});
 });

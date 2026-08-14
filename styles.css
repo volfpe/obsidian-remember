@@ -56,6 +56,10 @@
 	font-weight: var(--font-semibold);
 }
 
+.remember-has-waiting .remember-deck-header {
+	grid-template-columns: minmax(0, 1fr) 44px 44px 58px 52px;
+}
+
 .remember-deck-header-count {
 	text-align: right;
 }
@@ -99,12 +103,20 @@ button.remember-deck-row:hover:not(:disabled) {
 	text-align: right;
 }
 
+.remember-has-waiting .remember-deck-counts {
+	grid-template-columns: 44px 44px 58px 52px;
+}
+
 .remember-count-due {
 	color: var(--color-green);
 }
 
 .remember-count-new {
 	color: var(--color-blue);
+}
+
+.remember-count-waiting {
+	color: var(--text-faint);
 }
 
 .remember-count-total {

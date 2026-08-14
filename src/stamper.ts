@@ -1,7 +1,7 @@
 // The one note mutation in the codebase: inserting %%rem:<id>%% identity tokens (durability rule 1).
 
 import type { App, TFile } from 'obsidian';
-import { randomId } from './core/id';
+import { newCardId } from './core/id';
 import { parseCards } from './core/parser';
 
 /**
@@ -9,7 +9,7 @@ import { parseCards } from './core/parser';
  * Single-line cards get the token at the end of the line; multi-line cards get it
  * on its own line directly above the block.
  */
-export function stampText(text: string, mint: () => string = randomId): string {
+export function stampText(text: string, mint: () => string = newCardId): string {
 	const unstamped = parseCards(text).filter((card) => card.id === null);
 	if (unstamped.length === 0) return text;
 	const lines = text.split('\n');

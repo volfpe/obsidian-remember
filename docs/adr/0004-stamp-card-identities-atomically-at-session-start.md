@@ -13,3 +13,5 @@ Inside the process callback, parse the latest note content and add IDs to the ca
 ## Consequences
 
 Closing a session after stamping may leave unused IDs.
+
+The timestamp in a card ID records when the review session stamped the card.

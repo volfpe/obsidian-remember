@@ -1,6 +1,6 @@
 // One modal, desktop and mobile: deck list -> card front -> card back.
 
-import { Component, MarkdownRenderer, Modal, Notice, setIcon, TFile, type App } from 'obsidian';
+import { Component, MarkdownRenderer, Modal, Notice, setIcon, setTooltip, TFile, type App } from 'obsidian';
 import { Rating, type FSRS, type Grade } from 'ts-fsrs';
 import { appendEvent, appendUndoEvent, readEvents } from '../log';
 import type { ReviewEvent } from '../core/events';
@@ -16,13 +16,15 @@ import {
 import {
 	buildQueue,
 	countDeckStats,
+	introducedTodaySiblingKeys,
 	isDescendantDeck,
 	LEARN_AHEAD_LIMIT_MS,
 	selectCards,
+	type DeckCounts,
 	type NoteCard,
 	type QueueItem,
 } from '../core/queue';
-import type { RememberSettings } from '../settings';
+import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
 import { stampNote } from '../stamper';
 
 interface DeckNode {
@@ -84,33 +86,56 @@ export class ReviewModal extends Modal {
 			});
 			return;
 		}
-		const states = foldEvents(this.fsrs, await readEvents(this.app));
+		const events = await readEvents(this.app);
+		const states = foldEvents(this.fsrs, events);
 		const now = new Date();
+		const introducedToday = introducedTodaySiblingKeys(events, now);
+		const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
+		const tree = buildDeckTree(cards);
+		const statsByDeck = new Map<string, DeckCounts>();
+		const collectStats = (node: DeckNode) => {
+			statsByDeck.set(
+				node.path,
+				countDeckStats(
+					cards.filter((card) => isDescendantDeck(card.deck, node.path)),
+					states,
+					now,
+					introducedToday,
+					newCardsPerDay,
+				),
+			);
+			for (const child of node.children) collectStats(child);
+		};
+		for (const node of tree) collectStats(node);
+		const showWaiting = [...statsByDeck.values()].some((counts) => counts.waiting > 0);
 
 		const listEl = this.contentEl.createDiv({ cls: 'remember-decks' });
+		listEl.toggleClass('remember-has-waiting', showWaiting);
 		const header = listEl.createDiv({ cls: 'remember-deck-header' });
 		header.createSpan({ cls: 'remember-deck-header-name', text: 'Deck' });
-		header.createSpan({ cls: 'remember-deck-header-count', text: 'Due' });
-		header.createSpan({ cls: 'remember-deck-header-count', text: 'New' });
-		header.createSpan({ cls: 'remember-deck-header-count', text: 'Total' });
+		createCountHeader(header, 'Due', 'Card directions scheduled for review now.');
+		createCountHeader(header, 'New', 'Never-reviewed card directions available to introduce today.');
+		if (showWaiting) {
+			createCountHeader(header, 'Waiting', 'Never-reviewed card directions held for a future day by the daily limit.');
+		}
+		createCountHeader(header, 'Total', 'All card directions in this deck and its subdecks.');
 		const renderNode = (node: DeckNode, depth: number) => {
-			const counts = countDeckStats(
-				cards.filter((card) => isDescendantDeck(card.deck, node.path)),
-				states,
-				now,
-			);
+			const counts = statsByDeck.get(node.path)!;
 			const row = listEl.createEl('button', { cls: 'remember-deck-row' });
 			row.style.setProperty('--remember-depth', String(depth));
 			row.createSpan({ cls: 'remember-deck-name', text: node.name });
 			const countsEl = row.createSpan({ cls: 'remember-deck-counts' });
 			countsEl.createSpan({ cls: 'remember-count-due', text: String(counts.due) });
 			countsEl.createSpan({ cls: 'remember-count-new', text: String(counts.new) });
+			if (showWaiting) {
+				countsEl.createSpan({ cls: 'remember-count-waiting', text: String(counts.waiting) });
+			}
 			countsEl.createSpan({ cls: 'remember-count-total', text: String(counts.total) });
 			if (counts.due + counts.new === 0) row.disabled = true;
 			else row.addEventListener('click', () => void this.startSession(node.path));
 			for (const child of node.children) renderNode(child, depth + 1);
 		};
-		for (const node of buildDeckTree(cards)) renderNode(node, 0);
+		for (const node of tree) renderNode(node, 0);
 	}
 
 	/** Every card in every note carrying the deck property, including duplicate ids. */
@@ -183,8 +208,18 @@ export class ReviewModal extends Modal {
 
 		const selection = selectCards([...allByPath.values()].flat(), deck);
 		this.reportDuplicates(selection.dropped);
-		const states = foldEvents(this.fsrs, await readEvents(this.app));
-		this.queue = buildQueue(selection.kept, states, new Date());
+		const events = await readEvents(this.app);
+		const states = foldEvents(this.fsrs, events);
+		const now = new Date();
+		const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
+		const counts = countDeckStats(
+			selection.kept,
+			states,
+			now,
+			introducedTodaySiblingKeys(events, now),
+			newCardsPerDay,
+		);
+		this.queue = buildQueue(selection.kept, states, now, counts.new);
 		this.undoStack = [];
 		this.setTitle(deck);
 		this.showNext();
@@ -330,6 +365,12 @@ export class ReviewModal extends Modal {
 		else this.queue.splice(index, 0, item);
 	}
 
+}
+
+function createCountHeader(parent: HTMLElement, label: string, tooltip: string): void {
+	const header = parent.createSpan({ cls: 'remember-deck-header-count', text: label });
+	setTooltip(header, tooltip);
+	header.setAttribute('aria-label', `${label}: ${tooltip}`);
 }
 
 function sameSibling(a: QueueItem, b: QueueItem): boolean {

@@ -1,16 +1,19 @@
 import { Rating, type Grade } from 'ts-fsrs';
 import { App } from 'obsidian-test-mocks/obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { QueueItem } from '../core/queue';
+import type { NoteCard, QueueItem } from '../core/queue';
 import { DEFAULT_SETTINGS } from '../settings';
 import { ReviewModal } from './review-modal';
 
 interface ReviewModalHarness {
 	busy: boolean;
+	contentEl: HTMLElement;
 	current: QueueItem | null;
 	phase: 'decks' | 'question' | 'answer';
 	queue: QueueItem[];
 	rate(grade: Grade): Promise<void>;
+	scanCards(): Promise<NoteCard[]>;
+	showDeckList(): Promise<void>;
 }
 
 function item(cardId: string): QueueItem {
@@ -80,5 +83,76 @@ describe('rating durability', () => {
 		expect(currentWhilePending).toBe('first');
 		expect(modal.current?.cardId).toBe('second');
 		expect(modal.queue).toEqual([]);
+	});
+});
+
+describe('deck list', () => {
+	function freshCard(id: string): NoteCard {
+		return {
+			id,
+			front: `front of ${id}`,
+			back: `back of ${id}`,
+			reversed: false,
+			multiline: false,
+			line: 0,
+			path: `${id}.md`,
+			deck: 'deck',
+		};
+	}
+
+	it('shows Waiting only when the daily limit holds back unseen cards', async () => {
+		const { app } = makeHarness();
+		const limited = new ReviewModal(app, {
+			...DEFAULT_SETTINGS,
+			limitNewCardsPerDay: true,
+			newCardsPerDay: 1,
+		}) as unknown as ReviewModalHarness;
+		limited.scanCards = async () => [freshCard('a'), freshCard('b')];
+
+		await limited.showDeckList();
+
+		expect(limited.contentEl.querySelector('.remember-deck-header')?.textContent).toContain('Waiting');
+		expect(limited.contentEl.querySelector('.remember-count-new')?.textContent).toBe('1');
+		expect(limited.contentEl.querySelector('.remember-count-waiting')?.textContent).toBe('1');
+
+		const roomy = new ReviewModal(app, {
+			...DEFAULT_SETTINGS,
+			limitNewCardsPerDay: true,
+			newCardsPerDay: 2,
+		}) as unknown as ReviewModalHarness;
+		roomy.scanCards = async () => [freshCard('a'), freshCard('b')];
+
+		await roomy.showDeckList();
+
+		expect(roomy.contentEl.querySelector('.remember-deck-header')?.textContent).not.toContain('Waiting');
+		expect(roomy.contentEl.querySelector('.remember-count-waiting')).toBeNull();
+	});
+
+	it('leaves new card introductions unlimited by default', async () => {
+		const { app } = makeHarness();
+		const modal = new ReviewModal(app, { ...DEFAULT_SETTINGS }) as unknown as ReviewModalHarness;
+		modal.scanCards = async () => Array.from({ length: 25 }, (_, index) => freshCard(`card-${index}`));
+
+		await modal.showDeckList();
+
+		expect(modal.contentEl.querySelector('.remember-count-new')?.textContent).toBe('25');
+		expect(modal.contentEl.querySelector('.remember-count-waiting')).toBeNull();
+	});
+
+	it('explains every visible count header with an accessible tooltip', async () => {
+		const { app } = makeHarness();
+		const modal = new ReviewModal(app, {
+			...DEFAULT_SETTINGS,
+			limitNewCardsPerDay: true,
+			newCardsPerDay: 1,
+		}) as unknown as ReviewModalHarness;
+		modal.scanCards = async () => [freshCard('a'), freshCard('b')];
+
+		await modal.showDeckList();
+
+		const labels = ['Due', 'New', 'Waiting', 'Total'];
+		for (const label of labels) {
+			expect(modal.contentEl.querySelector(`[aria-label^="${label}:"]`)?.textContent).toBe(label);
+		}
 	});
 });

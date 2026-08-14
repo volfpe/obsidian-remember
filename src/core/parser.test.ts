@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { randomId } from './id';
 import { parseCards } from './parser';
 
 describe('single-line cards', () => {
@@ -111,11 +110,5 @@ describe('frontmatter and line endings', () => {
 		const cards = parseCards('q::a\r\n\r\nf\r\n?\r\nb\r\n');
 		expect(cards[0]).toMatchObject({ front: 'q', back: 'a' });
 		expect(cards[1]).toMatchObject({ front: 'f', back: 'b', multiline: true });
-	});
-});
-
-describe('randomId', () => {
-	it('mints 13-char base36 ids', () => {
-		for (let i = 0; i < 100; i++) expect(randomId()).toMatch(/^[0-9a-z]{13}$/);
 	});
 });
