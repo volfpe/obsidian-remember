@@ -10,7 +10,7 @@ export default class RememberPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
-		this.addRibbonIcon('layers', STRINGS.plugin.reviewRibbon, () => this.openReview());
+		this.addRibbonIcon('brain', STRINGS.plugin.reviewRibbon, () => this.openReview());
 		this.addCommand({ id: 'review', name: STRINGS.plugin.reviewCommand, callback: () => this.openReview() });
 		this.addSettingTab(new RememberSettingTab(this.app, this));
 		this.registerEditorExtension(hideTokens);

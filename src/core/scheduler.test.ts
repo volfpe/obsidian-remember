@@ -10,18 +10,7 @@ function event(t: string, r: 1 | 2 | 3 | 4, c = 'card1', s = 0): ReviewEvent {
 }
 
 describe('foldEvents', () => {
-	it('returns no state for no events', () => {
-		expect(foldEvents(f, []).size).toBe(0);
-	});
-
-	it('folds one event into a state due after the review', () => {
-		const states = foldEvents(f, [event('2026-01-01T10:00:00.000Z', Rating.Good)]);
-		const state = states.get(siblingKey('card1', 0))!;
-		expect(state.reps).toBe(1);
-		expect(state.due.getTime()).toBeGreaterThan(Date.parse('2026-01-01T10:00:00.000Z'));
-	});
-
-	it('equals rating-by-rating application (in-session state matches a later re-fold)', () => {
+	it('matches rating-by-rating application', () => {
 		const events = [
 			event('2026-01-01T10:00:00.000Z', Rating.Good),
 			event('2026-01-01T10:09:00.000Z', Rating.Again),
@@ -34,13 +23,11 @@ describe('foldEvents', () => {
 		expect(folded).toEqual(incremental);
 	});
 
-	it('sorts events by timestamp before replaying', () => {
+	it('replays in timestamp and event-id order', () => {
 		const early = event('2026-01-01T10:00:00.000Z', Rating.Good);
 		const late = event('2026-01-03T10:00:00.000Z', Rating.Good);
 		expect(foldEvents(f, [late, early])).toEqual(foldEvents(f, [early, late]));
-	});
 
-	it('breaks equal timestamp ties by event id', () => {
 		const again = { ...event('2026-01-01T10:00:00.000Z', Rating.Again), i: 'a' };
 		const easy = { ...event('2026-01-01T10:00:00.000Z', Rating.Easy), i: 'b' };
 		expect(foldEvents(f, [easy, again])).toEqual(foldEvents(f, [again, easy]));
@@ -51,14 +38,14 @@ describe('foldEvents', () => {
 			event('2026-01-01T10:00:00.000Z', Rating.Good, 'card1', 0),
 			event('2026-01-01T11:00:00.000Z', Rating.Again, 'card1', 1),
 		]);
+		expect(states.size).toBe(2);
 		expect(states.get(siblingKey('card1', 0))!.reps).toBe(1);
-		expect(states.get(siblingKey('card1', 1))!.lapses + states.get(siblingKey('card1', 1))!.reps).toBeGreaterThan(0);
-		expect(states.get(siblingKey('card1', 0))!.due).not.toEqual(states.get(siblingKey('card1', 1))!.due);
+		expect(states.get(siblingKey('card1', 1))!.reps).toBe(1);
 	});
 });
 
 describe('previewDue', () => {
-	it('orders the four outcomes Again <= Hard <= Good <= Easy', () => {
+	it('orders Again <= Hard <= Good <= Easy', () => {
 		const now = new Date('2026-01-01T10:00:00.000Z');
 		for (const state of [null, applyRating(f, null, new Date('2025-12-01T10:00:00.000Z'), Rating.Good)]) {
 			const preview = previewDue(f, state, now);

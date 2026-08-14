@@ -9,17 +9,9 @@ function counter(): () => string {
 }
 
 describe('stampText', () => {
-	it('appends the token to a single-line card', () => {
+	it('places tokens after single-line cards and above multi-line cards', () => {
 		expect(stampText('q::a', counter())).toBe('q::a %%rem:id0%%');
-	});
-
-	it('inserts the token on its own line above a multi-line card', () => {
 		expect(stampText('f\n?\nb', counter())).toBe('%%rem:id0%%\nf\n?\nb');
-	});
-
-	it('returns the text unchanged when every card is stamped', () => {
-		const text = 'q::a %%rem:x%%\n\n%%rem:y%%\nf\n?\nb';
-		expect(stampText(text, counter())).toBe(text);
 	});
 
 	it('stamps only the cards, leaving other lines alone', () => {
@@ -45,11 +37,8 @@ describe('stampText', () => {
 		expect(stampText(once)).toBe(once);
 	});
 
-	it('keeps CRLF line endings intact', () => {
+	it('preserves CRLF line endings for both card formats', () => {
 		expect(stampText('q::a\r\nrest', counter())).toBe('q::a %%rem:id0%%\r\nrest');
-	});
-
-	it('uses CRLF for an inserted multi-line token in a CRLF note', () => {
 		expect(stampText('front\r\n?\r\nback', counter())).toBe('%%rem:id0%%\r\nfront\r\n?\r\nback');
 	});
 

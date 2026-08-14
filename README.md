@@ -36,7 +36,8 @@ La mano — feminine despite the -o ending.
 
 Use `??` to also create a card in the reverse direction.
 
-Run **Remember: Review**, choose a deck, reveal each answer, and rate it.
+Click the **Remember: review** button in the left panel to start a review.
+You can also run `Remember: Review` command.
 
 ### Multi-device sync
 

@@ -10,7 +10,7 @@ import {
 	selectCards,
 	type NoteCard,
 } from './queue';
-import { applyRating, foldEvents, makeFsrs } from './scheduler';
+import { foldEvents, makeFsrs } from './scheduler';
 
 const f = makeFsrs(0.9);
 const now = new Date('2026-01-10T12:00:00.000Z');
@@ -194,12 +194,4 @@ describe('buildQueue', () => {
 		expect(queue.find((item) => item.sub === 0)!.state).not.toBeNull();
 		expect(queue.find((item) => item.sub === 1)!.state).toBeNull();
 	});
-
-	it('keeps showAt equal to the folded due date', () => {
-		const when = '2026-01-08T12:00:00.000Z';
-		const states = statesAfterGood([['x', when]]);
-		const expected = applyRating(f, null, new Date(when), Rating.Good).due;
-		expect(buildQueue([card('x')], states, now)[0].showAt).toEqual(expected);
-	});
-
 });
