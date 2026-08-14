@@ -1,4 +1,5 @@
 import { Plugin } from 'obsidian';
+import { STRINGS } from './i18n';
 import { cleanOwnConflictCopies } from './log';
 import { DEFAULT_SETTINGS, RememberSettingTab, type RememberSettings } from './settings';
 import { hideTokens } from './ui/hide-tokens';
@@ -9,8 +10,8 @@ export default class RememberPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
-		this.addRibbonIcon('layers', 'Remember: review', () => this.openReview());
-		this.addCommand({ id: 'review', name: 'Review', callback: () => this.openReview() });
+		this.addRibbonIcon('layers', STRINGS.plugin.reviewRibbon, () => this.openReview());
+		this.addCommand({ id: 'review', name: STRINGS.plugin.reviewCommand, callback: () => this.openReview() });
 		this.addSettingTab(new RememberSettingTab(this.app, this));
 		this.registerEditorExtension(hideTokens);
 		this.app.workspace.onLayoutReady(() => {

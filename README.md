@@ -1,6 +1,6 @@
 # Remember
 
-A minimal spaced repetition inside Obsidian.
+A minimal spaced repetition plugin for Obsidian.
 
 Designed for reliable use across synced devices.
 
@@ -34,7 +34,7 @@ What article does "mano" take?
 La mano — feminine despite the -o ending.
 ```
 
-Use `??` instead of `?` to also create a card in the reverse direction.
+Use `??` to also create a card in the reverse direction.
 
 Run **Remember: Review**, choose a deck, reveal each answer, and rate it.
 

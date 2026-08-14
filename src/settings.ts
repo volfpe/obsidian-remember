@@ -1,4 +1,5 @@
 import { PluginSettingTab, type App, type SettingDefinitionItem } from 'obsidian';
+import { STRINGS } from './i18n';
 import type RememberPlugin from './main';
 
 export interface RememberSettings {
@@ -30,8 +31,8 @@ export class RememberSettingTab extends PluginSettingTab {
 	getSettingDefinitions(): SettingDefinitionItem<keyof RememberSettings>[] {
 		return [
 			{
-				name: 'Deck property name',
-				desc: 'Frontmatter property that assigns a note to a deck, e.g. "deck: lang/spanish".',
+				name: STRINGS.settings.deckPropertyName,
+				desc: STRINGS.settings.deckPropertyDescription,
 				control: {
 					type: 'text',
 					key: 'deckProperty',
@@ -39,8 +40,8 @@ export class RememberSettingTab extends PluginSettingTab {
 				},
 			},
 			{
-				name: 'Limit new cards per day',
-				desc: 'When enabled, hold unseen card directions for future days after the daily limit is reached.',
+				name: STRINGS.settings.limitNewCardsName,
+				desc: STRINGS.settings.limitNewCardsDescription,
 				control: {
 					type: 'toggle',
 					key: 'limitNewCardsPerDay',
@@ -48,8 +49,8 @@ export class RememberSettingTab extends PluginSettingTab {
 				},
 			},
 			{
-				name: 'New cards per day',
-				desc: 'Maximum number of never-reviewed card directions introduced from the selected deck each day.',
+				name: STRINGS.settings.newCardsName,
+				desc: STRINGS.settings.newCardsDescription,
 				control: {
 					type: 'number',
 					key: 'newCardsPerDay',
@@ -61,12 +62,12 @@ export class RememberSettingTab extends PluginSettingTab {
 					validate: (value) =>
 						Number.isInteger(value) && value >= 0 && value <= 9999
 							? undefined
-							: 'Enter a whole number from 0 to 9999.',
+							: STRINGS.settings.newCardsValidation,
 				},
 			},
 			{
-				name: 'Desired retention',
-				desc: 'Fsrs target recall probability. Higher means shorter intervals.',
+				name: STRINGS.settings.desiredRetentionName,
+				desc: STRINGS.settings.desiredRetentionDescription,
 				control: {
 					type: 'slider',
 					key: 'desiredRetention',

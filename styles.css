@@ -13,6 +13,43 @@
 	flex: 0 0 auto;
 }
 
+.remember-modal .modal-title.remember-session-title {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	min-width: 0;
+}
+
+.remember-session-title-name {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.remember-progress {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: baseline;
+	gap: 3px;
+	padding: 3px 7px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-medium);
+	line-height: 1.2;
+}
+
+.remember-progress-current {
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+}
+
 .remember-modal > .modal-content {
 	flex: 1 1 auto;
 	min-height: 0;

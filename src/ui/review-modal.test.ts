@@ -11,9 +11,14 @@ interface ReviewModalHarness {
 	current: QueueItem | null;
 	phase: 'decks' | 'question' | 'answer';
 	queue: QueueItem[];
+	sessionCompleted: number;
+	sessionTotal: number;
+	titleEl: HTMLElement;
 	rate(grade: Grade): Promise<void>;
+	renderSessionTitle(deck: string): void;
 	scanCards(): Promise<NoteCard[]>;
 	showDeckList(): Promise<void>;
+	undo(): Promise<void>;
 }
 
 function item(cardId: string): QueueItem {
@@ -83,6 +88,49 @@ describe('rating durability', () => {
 		expect(currentWhilePending).toBe('first');
 		expect(modal.current?.cardId).toBe('second');
 		expect(modal.queue).toEqual([]);
+	});
+});
+
+describe('session progress', () => {
+	function prepareProgress(modal: ReviewModalHarness): void {
+		modal.sessionTotal = 2;
+		modal.sessionCompleted = 0;
+		modal.renderSessionTitle('deck');
+	}
+
+	it('advances when a card leaves the session', async () => {
+		const { modal } = makeHarness();
+		prepareProgress(modal);
+
+		await modal.rate(Rating.Easy);
+
+		expect(modal.current?.cardId).toBe('second');
+		expect(modal.sessionCompleted).toBe(1);
+		expect(modal.titleEl.querySelector('.remember-progress')?.textContent).toBe('2/2');
+		expect(modal.titleEl.querySelector('.remember-progress')?.getAttribute('aria-label')).toBe('Card 2 of 2');
+	});
+
+	it('holds its position when Again requeues the card', async () => {
+		const { modal } = makeHarness();
+		prepareProgress(modal);
+
+		await modal.rate(Rating.Again);
+
+		expect(modal.current?.cardId).toBe('second');
+		expect(modal.sessionCompleted).toBe(0);
+		expect(modal.titleEl.querySelector('.remember-progress')?.textContent).toBe('1/2');
+	});
+
+	it('restores progress when the last review is undone', async () => {
+		const { modal } = makeHarness();
+		prepareProgress(modal);
+		await modal.rate(Rating.Easy);
+
+		await modal.undo();
+
+		expect(modal.current?.cardId).toBe('first');
+		expect(modal.sessionCompleted).toBe(0);
+		expect(modal.titleEl.querySelector('.remember-progress')?.textContent).toBe('1/2');
 	});
 });
 

@@ -1,6 +1,7 @@
 // Pure events -> per-sibling FSRS state via ts-fsrs. No Obsidian imports.
 
 import { createEmptyCard, fsrs, generatorParameters, Rating, type Card as FsrsCard, type FSRS, type Grade } from 'ts-fsrs';
+import { STRINGS } from '../i18n';
 import type { ReviewEvent } from './events';
 
 export function makeFsrs(desiredRetention: number): FSRS {
@@ -42,13 +43,13 @@ export function previewDue(f: FSRS, state: FsrsCard | null, now: Date): Record<G
 
 export function formatInterval(from: Date, to: Date): string {
 	const minutes = (to.getTime() - from.getTime()) / 60_000;
-	if (minutes < 1) return '<1m';
-	if (Math.round(minutes) < 60) return `${Math.round(minutes)}m`;
+	if (minutes < 1) return STRINGS.intervals.lessThanMinute;
+	if (Math.round(minutes) < 60) return STRINGS.intervals.minutes(Math.round(minutes));
 	const hours = minutes / 60;
-	if (Math.round(hours) < 24) return `${Math.round(hours)}h`;
+	if (Math.round(hours) < 24) return STRINGS.intervals.hours(Math.round(hours));
 	const days = hours / 24;
-	if (Math.round(days) < 31) return `${Math.round(days)}d`;
+	if (Math.round(days) < 31) return STRINGS.intervals.days(Math.round(days));
 	const months = days / 30.44;
-	if (Math.round(months) < 12) return `${Math.round(months)}mo`;
-	return `${(days / 365.25).toFixed(1).replace(/\.0$/, '')}y`;
+	if (Math.round(months) < 12) return STRINGS.intervals.months(Math.round(months));
+	return STRINGS.intervals.years((days / 365.25).toFixed(1).replace(/\.0$/, ''));
 }
