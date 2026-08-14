@@ -7,6 +7,7 @@ import {
 	dedupeById,
 	introducedTodaySiblingKeys,
 	isDescendantDeck,
+	reviewedTodaySiblingKeys,
 	selectCards,
 	type NoteCard,
 } from './queue';
@@ -66,9 +67,9 @@ describe('dedupeById', () => {
 });
 
 describe('countDeckStats', () => {
-	it('counts unstamped and never-reviewed siblings as new, reversed cards twice', () => {
+	it('counts only one new sibling per group and reports the other as buried', () => {
 		const counts = countDeckStats([card(null), card('a', { reversed: true })], new Map(), now);
-		expect(counts).toEqual({ due: 0, new: 3, waiting: 0, total: 3 });
+		expect(counts).toEqual({ due: 0, new: 2, waiting: 0, buried: 1, total: 3 });
 	});
 
 	it('counts a past due as due and a future due as neither', () => {
@@ -81,6 +82,7 @@ describe('countDeckStats', () => {
 			due: 1,
 			new: 0,
 			waiting: 0,
+			buried: 0,
 			total: 2,
 		});
 	});
@@ -100,12 +102,34 @@ describe('countDeckStats', () => {
 		const states = foldEvents(f, events);
 		const cards = [card('introduced-a'), card('introduced-b'), card('fresh-a'), card('fresh-b'), card('fresh-c')];
 
-		expect(countDeckStats(cards, states, localNow, introducedTodaySiblingKeys(events, localNow), 3)).toEqual({
+		expect(countDeckStats(cards, states, localNow, {
+			introducedToday: introducedTodaySiblingKeys(events, localNow),
+			newCardsPerDay: 3,
+		})).toEqual({
 			due: 2,
 			new: 1,
 			waiting: 2,
+			buried: 0,
 			total: 5,
 		});
+	});
+
+	it('separates siblings buried before the daily limit from waiting cards', () => {
+		const cards = [card('a', { reversed: true }), card('b', { reversed: true })];
+
+		expect(countDeckStats(cards, new Map(), now, { newCardsPerDay: 1 })).toEqual({
+			due: 0,
+			new: 1,
+			waiting: 1,
+			buried: 2,
+			total: 4,
+		});
+	});
+
+	it('counts every eligible sibling when burying is disabled', () => {
+		expect(
+			countDeckStats([card('a', { reversed: true })], new Map(), now, { burySiblings: false }),
+		).toEqual({ due: 0, new: 2, waiting: 0, buried: 0, total: 2 });
 	});
 });
 
@@ -134,6 +158,17 @@ describe('introducedTodaySiblingKeys', () => {
 
 		expect([...introduced].sort()).toEqual(['reversed#0', 'reversed#1']);
 	});
+
+	it('finds every sibling reviewed today, not only siblings first introduced today', () => {
+		const localNow = new Date(2026, 0, 10, 12);
+		const events: ReviewEvent[] = [
+			{ v: 1, k: 'r', i: 'old', t: new Date(2026, 0, 9, 9).toISOString(), c: 'a', s: 0, r: Rating.Good, dr: 0.9 },
+			{ v: 1, k: 'r', i: 'today', t: new Date(2026, 0, 10, 9).toISOString(), c: 'a', s: 0, r: Rating.Good, dr: 0.9 },
+			{ v: 1, k: 'r', i: 'other', t: new Date(2026, 0, 10, 10).toISOString(), c: 'b', s: 2, r: Rating.Good, dr: 0.9 },
+		];
+
+		expect([...reviewedTodaySiblingKeys(events, localNow)].sort()).toEqual(['a#0', 'b#2']);
+	});
 });
 
 describe('buildQueue', () => {
@@ -154,7 +189,9 @@ describe('buildQueue', () => {
 	});
 
 	it('expands a reversed card into two siblings with swapped sides', () => {
-		const queue = buildQueue([card('r', { reversed: true })], new Map(), now);
+		const queue = buildQueue([card('r', { reversed: true })], new Map(), now, {
+			burySiblings: false,
+		});
 		expect(queue).toHaveLength(2);
 		const forward = queue.find((item) => item.sub === 0)!;
 		const reverse = queue.find((item) => item.sub === 1)!;
@@ -172,10 +209,10 @@ describe('buildQueue', () => {
 	it('limits only new cards and selects the same oldest cohort on every build', () => {
 		const states = statesAfterGood([['due', '2026-01-05T12:00:00.000Z']]);
 		const cards = [card('due'), ...Array.from({ length: 10 }, (_, i) => card(`new-${i}`))];
-		const first = buildQueue(cards, states, now, 3);
+		const first = buildQueue(cards, states, now, { maxNewCards: 3 });
 		const tomorrow = new Date(now);
 		tomorrow.setDate(tomorrow.getDate() + 1);
-		const second = buildQueue([...cards].reverse(), states, tomorrow, 3);
+		const second = buildQueue([...cards].reverse(), states, tomorrow, { maxNewCards: 3 });
 
 		expect(first[0].cardId).toBe('due');
 		expect(second[0].cardId).toBe('due');
@@ -190,8 +227,81 @@ describe('buildQueue', () => {
 		const states = foldEvents(f, [
 			{ v: 1, k: 'r', i: 'review-r', t: '2026-01-08T12:00:00.000Z', c: 'r', s: 0, r: Rating.Good, dr: 0.9 },
 		]);
-		const queue = buildQueue([card('r', { reversed: true })], states, now);
+		const queue = buildQueue([card('r', { reversed: true })], states, now, {
+			burySiblings: false,
+		});
 		expect(queue.find((item) => item.sub === 0)!.state).not.toBeNull();
 		expect(queue.find((item) => item.sub === 1)!.state).toBeNull();
+	});
+
+	it('selects the earliest-due sibling and buries the other', () => {
+		const states = foldEvents(f, [
+			{ v: 1, k: 'r', i: 'later', t: '2026-01-08T12:00:00.000Z', c: 'r', s: 0, r: Rating.Good, dr: 0.9 },
+			{ v: 1, k: 'r', i: 'earlier', t: '2026-01-05T12:00:00.000Z', c: 'r', s: 1, r: Rating.Good, dr: 0.9 },
+		]);
+
+		const queue = buildQueue([card('r', { reversed: true })], states, now);
+		expect(queue).toHaveLength(1);
+		expect(queue[0].sub).toBe(1);
+	});
+
+	it('selects a scheduled sibling before a new sibling', () => {
+		const states = foldEvents(f, [
+			{ v: 1, k: 'r', i: 'due', t: '2026-01-05T12:00:00.000Z', c: 'r', s: 1, r: Rating.Good, dr: 0.9 },
+		]);
+
+		const queue = buildQueue([card('r', { reversed: true })], states, now);
+		expect(queue.map((item) => item.sub)).toEqual([1]);
+	});
+
+	it('keeps other siblings buried after the reviewed sibling is no longer due', () => {
+		const events: ReviewEvent[] = [
+			{ v: 1, k: 'r', i: 'today', t: '2026-01-10T11:59:00.000Z', c: 'r', s: 0, r: Rating.Good, dr: 0.9 },
+		];
+		const states = foldEvents(f, events);
+		const reviewedToday = reviewedTodaySiblingKeys(events, now);
+
+		expect(buildQueue([card('r', { reversed: true })], states, now, { reviewedToday })).toEqual([]);
+		expect(countDeckStats([card('r', { reversed: true })], states, now, { reviewedToday })).toEqual({
+			due: 0,
+			new: 0,
+			waiting: 0,
+			buried: 1,
+			total: 2,
+		});
+	});
+
+	it('allows the reviewed sibling to repeat while its other sibling stays buried', () => {
+		const events: ReviewEvent[] = [
+			{ v: 1, k: 'r', i: 'today', t: '2026-01-10T09:00:00.000Z', c: 'r', s: 0, r: Rating.Good, dr: 0.9 },
+		];
+		const states = foldEvents(f, events);
+		const queue = buildQueue([card('r', { reversed: true })], states, now, {
+			reviewedToday: reviewedTodaySiblingKeys(events, now),
+		});
+
+		expect(queue.map((item) => item.sub)).toEqual([0]);
+	});
+
+	it('releases the untouched sibling on the next local day', () => {
+		const events: ReviewEvent[] = [
+			{ v: 1, k: 'r', i: 'today', t: '2026-01-10T09:00:00.000Z', c: 'r', s: 0, r: Rating.Easy, dr: 0.9 },
+		];
+		const states = foldEvents(f, events);
+		const tomorrow = new Date('2026-01-11T12:00:00.000Z');
+		const queue = buildQueue([card('r', { reversed: true })], states, tomorrow, {
+			reviewedToday: reviewedTodaySiblingKeys(events, tomorrow),
+		});
+
+		expect(queue.map((item) => item.sub)).toEqual([1]);
+	});
+
+	it('applies the new-card limit after choosing distinct sibling groups', () => {
+		const cards = Array.from({ length: 4 }, (_, index) => card(`r-${index}`, { reversed: true }));
+		const queue = buildQueue(cards, new Map(), now, { maxNewCards: 3 });
+
+		expect(queue).toHaveLength(3);
+		expect(new Set(queue.map((item) => item.cardId)).size).toBe(3);
+		expect(queue.every((item) => item.sub === 0)).toBe(true);
 	});
 });

@@ -8,6 +8,9 @@ export const STRINGS = {
 	settings: {
 		deckPropertyName: 'Deck property name',
 		deckPropertyDescription: 'Frontmatter property that assigns a note to a deck, e.g. "deck: lang/spanish".',
+		burySiblingsName: 'Bury sibling cards',
+		burySiblingsDescription:
+			'Show only one sibling from each card per study day (from reverse-direction or cloze cards).',
 		limitNewCardsName: 'Limit new cards per day',
 		limitNewCardsDescription:
 			'When enabled, hold unseen cards for future days after the daily limit is reached.',
@@ -35,6 +38,10 @@ export const STRINGS = {
 			waiting: {
 				label: 'Waiting',
 				tooltip: 'Never-reviewed cards held for a future day by the daily limit.',
+			},
+			buried: {
+				label: 'Buried',
+				tooltip: 'Cards held until another study day so only one sibling from each card is eligible (from reverse-direction or cloze cards).',
 			},
 			total: {
 				label: 'Total',

@@ -19,6 +19,7 @@ import {
 	introducedTodaySiblingKeys,
 	isDescendantDeck,
 	LEARN_AHEAD_LIMIT_MS,
+	reviewedTodaySiblingKeys,
 	selectCards,
 	type DeckCounts,
 	type NoteCard,
@@ -101,6 +102,7 @@ export class ReviewModal extends Modal {
 		const states = foldEvents(this.fsrs, events);
 		const now = new Date();
 		const introducedToday = introducedTodaySiblingKeys(events, now);
+		const reviewedToday = reviewedTodaySiblingKeys(events, now);
 		const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
 		const tree = buildDeckTree(cards);
 		const statsByDeck = new Map<string, DeckCounts>();
@@ -111,23 +113,32 @@ export class ReviewModal extends Modal {
 					cards.filter((card) => isDescendantDeck(card.deck, node.path)),
 					states,
 					now,
-					introducedToday,
-					newCardsPerDay,
+					{
+						introducedToday,
+						reviewedToday,
+						newCardsPerDay,
+						burySiblings: this.settings.burySiblings,
+					},
 				),
 			);
 			for (const child of node.children) collectStats(child);
 		};
 		for (const node of tree) collectStats(node);
 		const showWaiting = [...statsByDeck.values()].some((counts) => counts.waiting > 0);
+		const showBuried = [...statsByDeck.values()].some((counts) => counts.buried > 0);
 
 		const listEl = this.contentEl.createDiv({ cls: 'remember-decks' });
 		listEl.toggleClass('remember-has-waiting', showWaiting);
+		listEl.toggleClass('remember-has-buried', showBuried);
 		const header = listEl.createDiv({ cls: 'remember-deck-header' });
 		header.createSpan({ cls: 'remember-deck-header-name', text: STRINGS.review.deckHeader });
 		createCountHeader(header, STRINGS.review.counts.due);
 		createCountHeader(header, STRINGS.review.counts.new);
 		if (showWaiting) {
 			createCountHeader(header, STRINGS.review.counts.waiting);
+		}
+		if (showBuried) {
+			createCountHeader(header, STRINGS.review.counts.buried);
 		}
 		createCountHeader(header, STRINGS.review.counts.total);
 		const renderNode = (node: DeckNode, depth: number) => {
@@ -140,6 +151,9 @@ export class ReviewModal extends Modal {
 			countsEl.createSpan({ cls: 'remember-count-new', text: String(counts.new) });
 			if (showWaiting) {
 				countsEl.createSpan({ cls: 'remember-count-waiting', text: String(counts.waiting) });
+			}
+			if (showBuried) {
+				countsEl.createSpan({ cls: 'remember-count-buried', text: String(counts.buried) });
 			}
 			countsEl.createSpan({ cls: 'remember-count-total', text: String(counts.total) });
 			if (counts.due + counts.new === 0) row.disabled = true;
@@ -216,14 +230,24 @@ export class ReviewModal extends Modal {
 		const states = foldEvents(this.fsrs, events);
 		const now = new Date();
 		const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
+		const introducedToday = introducedTodaySiblingKeys(events, now);
+		const reviewedToday = reviewedTodaySiblingKeys(events, now);
 		const counts = countDeckStats(
 			selection.kept,
 			states,
 			now,
-			introducedTodaySiblingKeys(events, now),
-			newCardsPerDay,
+			{
+				introducedToday,
+				reviewedToday,
+				newCardsPerDay,
+				burySiblings: this.settings.burySiblings,
+			},
 		);
-		this.queue = buildQueue(selection.kept, states, now, counts.new);
+		this.queue = buildQueue(selection.kept, states, now, {
+			maxNewCards: counts.new,
+			reviewedToday,
+			burySiblings: this.settings.burySiblings,
+		});
 		this.sessionTotal = this.queue.length;
 		this.sessionCompleted = 0;
 		this.undoStack = [];

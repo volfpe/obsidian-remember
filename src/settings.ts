@@ -5,6 +5,7 @@ import type RememberPlugin from './main';
 export interface RememberSettings {
 	deckProperty: string;
 	desiredRetention: number;
+	burySiblings: boolean;
 	limitNewCardsPerDay: boolean;
 	newCardsPerDay: number;
 }
@@ -12,6 +13,7 @@ export interface RememberSettings {
 export const DEFAULT_SETTINGS: RememberSettings = {
 	deckProperty: 'deck',
 	desiredRetention: 0.9,
+	burySiblings: true,
 	limitNewCardsPerDay: false,
 	newCardsPerDay: 20,
 };
@@ -37,6 +39,15 @@ export class RememberSettingTab extends PluginSettingTab {
 					type: 'text',
 					key: 'deckProperty',
 					defaultValue: DEFAULT_SETTINGS.deckProperty,
+				},
+			},
+			{
+				name: STRINGS.settings.burySiblingsName,
+				desc: STRINGS.settings.burySiblingsDescription,
+				control: {
+					type: 'toggle',
+					key: 'burySiblings',
+					defaultValue: DEFAULT_SETTINGS.burySiblings,
 				},
 			},
 			{
@@ -87,6 +98,8 @@ export class RememberSettingTab extends PluginSettingTab {
 	override async setControlValue(key: keyof RememberSettings, value: unknown): Promise<void> {
 		if (key === 'deckProperty' && typeof value === 'string') {
 			this.plugin.settings.deckProperty = value.trim() || DEFAULT_SETTINGS.deckProperty;
+		} else if (key === 'burySiblings' && typeof value === 'boolean') {
+			this.plugin.settings.burySiblings = value;
 		} else if (key === 'limitNewCardsPerDay' && typeof value === 'boolean') {
 			this.plugin.settings.limitNewCardsPerDay = value;
 		} else if (

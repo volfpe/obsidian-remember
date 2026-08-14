@@ -1,21 +1,19 @@
-# ADR 0009: Shuffle sibling cards
+# ADR 0009: Bury sibling cards
 
 ## Context
 
-The two directions of a reversed card may appear close together. Seeing one direction can make the other direction easier.
+Sibling cards may reveal each other's answers when shown on the same day.
 
 ## Decision
 
-When a daily new-card limit applies, select the new-card cohort deterministically before ordering the review queue.
+Bury sibling cards by default.
 
-Shuffle selected cards with the same queue time for presentation.
+Show at most one sibling from each card group per local calendar day.
 
-Do not bury sibling cards or move them to another session.
+Choose a scheduled sibling before a new sibling. Then choose the earliest due sibling.
 
 ## Consequences
 
-Synchronized devices select the same daily cohort, but may present it in a different order.
+Sibling cards normally appear on different days.
 
-Sibling cards are usually separated when the queue has enough cards.
-
-Small queues may show sibling cards next to each other.
+Devices get the same buried state after their review logs sync. Offline devices may temporarily differ.

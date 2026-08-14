@@ -39,6 +39,8 @@ function parseSettings(value: unknown): RememberSettings {
 	const stored = value as Record<string, unknown>;
 	return {
 		deckProperty: typeof stored.deckProperty === 'string' ? stored.deckProperty : DEFAULT_SETTINGS.deckProperty,
+		burySiblings:
+			typeof stored.burySiblings === 'boolean' ? stored.burySiblings : DEFAULT_SETTINGS.burySiblings,
 		limitNewCardsPerDay:
 			typeof stored.limitNewCardsPerDay === 'boolean'
 				? stored.limitNewCardsPerDay
