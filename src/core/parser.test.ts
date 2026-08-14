@@ -55,6 +55,39 @@ describe('parseCards', () => {
 		]);
 	});
 
+	it('does not parse cards inside fenced code blocks', () => {
+		const text = ['before::card', '```md', 'inside::code', '?', '```', '~~~', 'also:::code', '~~~', 'after::card'].join(
+			'\n',
+		);
+		expect(parseCards(text).map(({ front, line }) => ({ front, line }))).toEqual([
+			{ front: 'before', line: 0 },
+			{ front: 'after', line: 8 },
+		]);
+	});
+
+	it('preserves fenced code inside a multi-line card', () => {
+		const [card] = parseCards(['Question', '```ts', 'const fake = "q::a";', '?', '```', '?', 'Answer'].join('\n'));
+		expect(card).toMatchObject({
+			front: ['Question', '```ts', 'const fake = "q::a";', '?', '```'].join('\n'),
+			back: 'Answer',
+			multiline: true,
+		});
+	});
+
+	it('ignores inline code but finds a separator outside it', () => {
+		expect(parseCards('Use `key::value` in settings')).toEqual([]);
+		expect(parseCards('What does `key::value` mean?::A key-value pair')[0]).toMatchObject({
+			front: 'What does `key::value` mean?',
+			back: 'A key-value pair',
+		});
+	});
+
+	it('preserves identity-like text inside code', () => {
+		const [card] = parseCards(['Question', '```', '%%rem:literal%%', '```', '?', 'Answer'].join('\n'));
+		expect(card.front).toContain('%%rem:literal%%');
+		expect(card.id).toBeNull();
+	});
+
 	it('handles CRLF input', () => {
 		const cards = parseCards('q::a\r\n\r\nf\r\n?\r\nb\r\n');
 		expect(cards.map(({ front, back }) => ({ front, back }))).toEqual([

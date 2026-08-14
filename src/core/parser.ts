@@ -1,5 +1,7 @@
 // Pure note-text -> Card[] parsing. No Obsidian imports.
 
+import { maskMarkdownCode, type MarkdownLine } from './markdown-code';
+
 export interface ParsedCard {
 	/** Identity token id, or null while the card is unstamped. */
 	id: string | null;
@@ -21,9 +23,9 @@ const TOKEN_ONLY = /^%%rem:([0-9a-z]+)%%$/;
 const TOKEN_AT_END = /%%rem:([0-9a-z]+)%%\s*$/;
 
 export function parseCards(text: string): ParsedCard[] {
-	const lines = text.split('\n');
+	const lines = maskMarkdownCode(text.split('\n').map(clean));
 	const start = bodyStart(lines);
-	const isBlank = (i: number) => lines[i].trim() === '';
+	const isBlank = (i: number) => lines[i].raw.trim() === '';
 
 	const cards: ParsedCard[] = [];
 	let i = start;
@@ -41,24 +43,24 @@ export function parseCards(text: string): ParsedCard[] {
 }
 
 /** Frontmatter is metadata (it carries the deck property), never card text. */
-function bodyStart(lines: string[]): number {
-	if (clean(lines[0]) !== '---') return 0;
+function bodyStart(lines: readonly MarkdownLine[]): number {
+	if (lines[0]?.raw !== '---') return 0;
 	for (let i = 1; i < lines.length; i++) {
-		const line = clean(lines[i]).trimEnd();
+		const line = lines[i].raw.trimEnd();
 		if (line === '---' || line === '...') return i + 1;
 	}
 	return 0;
 }
 /** A block is the contiguous run of non-blank lines [start, end]. */
-function parseBlock(lines: string[], start: number, end: number, out: ParsedCard[]): void {
+function parseBlock(lines: readonly MarkdownLine[], start: number, end: number, out: ParsedCard[]): void {
 	// A token on its own line directly above the block is the block's id (multi-line cards).
-	const blockToken = TOKEN_ONLY.exec(lines[start].trim());
+	const first = lines[start];
+	const blockToken = first.raw.trim() === first.searchable.trim() ? TOKEN_ONLY.exec(first.raw.trim()) : null;
 	const contentStart = blockToken ? start + 1 : start;
-	const stripped = lines.slice(start, end + 1).map((line) => clean(line).replace(TOKEN, ''));
 
 	let separator = -1;
 	for (let i = contentStart; i <= end; i++) {
-		const trimmed = stripped[i - start].trim();
+		const trimmed = lines[i].searchable.trim();
 		if (trimmed === '?' || trimmed === '??') {
 			separator = i;
 			break;
@@ -71,7 +73,7 @@ function parseBlock(lines: string[], start: number, end: number, out: ParsedCard
 			id: blockToken ? blockToken[1] : null,
 			front: blockText(lines, contentStart, separator - 1),
 			back: blockText(lines, separator + 1, end),
-			reversed: lines[separator].trim() === '??',
+			reversed: lines[separator].searchable.trim() === '??',
 			multiline: true,
 			line: contentStart,
 		});
@@ -80,18 +82,17 @@ function parseBlock(lines: string[], start: number, end: number, out: ParsedCard
 
 	// Otherwise every line with :: / ::: is one single-line card.
 	for (let i = start; i <= end; i++) {
-		const raw = clean(lines[i]);
-		const endToken = TOKEN_AT_END.exec(raw);
-		const content = stripped[i - start];
+		const { raw, searchable } = lines[i];
+		const endToken = tokenAtEnd(raw, searchable);
 		// Separators are checked longest-first: ::: before ::.
-		const at3 = content.indexOf(':::');
-		const at = at3 >= 0 ? at3 : content.indexOf('::');
+		const at3 = searchable.indexOf(':::');
+		const at = at3 >= 0 ? at3 : searchable.indexOf('::');
 		if (at < 0) continue;
 		const width = at3 >= 0 ? 3 : 2;
 		out.push({
 			id: endToken ? endToken[1] : null,
-			front: content.slice(0, at).trim(),
-			back: content.slice(at + width).trim(),
+			front: stripTokens(raw.slice(0, at), searchable.slice(0, at)).trim(),
+			back: stripTokens(raw.slice(at + width), searchable.slice(at + width)).trim(),
 			reversed: width === 3,
 			multiline: false,
 			line: i,
@@ -99,14 +100,32 @@ function parseBlock(lines: string[], start: number, end: number, out: ParsedCard
 	}
 }
 
-function blockText(lines: string[], from: number, to: number): string {
+function blockText(lines: readonly MarkdownLine[], from: number, to: number): string {
 	const kept: string[] = [];
 	for (let i = from; i <= to; i++) {
-		const line = clean(lines[i]);
-		if (TOKEN_ONLY.test(line.trim())) continue; // stray token lines are identity noise, never text
-		kept.push(line.replace(TOKEN, ''));
+		const { raw, searchable } = lines[i];
+		if (raw.trim() === searchable.trim() && TOKEN_ONLY.test(raw.trim())) continue;
+		kept.push(stripTokens(raw, searchable));
 	}
 	return kept.join('\n');
+}
+
+function tokenAtEnd(raw: string, searchable: string): RegExpExecArray | null {
+	const match = TOKEN_AT_END.exec(raw);
+	if (match === null) return null;
+	const token = `%%rem:${match[1]}%%`;
+	return searchable.slice(match.index, match.index + token.length) === token ? match : null;
+}
+
+function stripTokens(raw: string, searchable: string): string {
+	let result = '';
+	let start = 0;
+	TOKEN.lastIndex = 0;
+	for (let match = TOKEN.exec(searchable); match !== null; match = TOKEN.exec(searchable)) {
+		result += raw.slice(start, match.index);
+		start = match.index + match[0].length;
+	}
+	return result + raw.slice(start);
 }
 
 function clean(line: string | undefined): string {

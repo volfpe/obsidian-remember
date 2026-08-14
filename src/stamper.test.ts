@@ -19,6 +19,13 @@ describe('stampText', () => {
 		expect(stamped).toBe('# heading\n\nq::a %%rem:id0%%\nplain\n\ntext');
 	});
 
+	it('does not stamp card syntax inside code', () => {
+		const text = ['```md', 'inside::code', '```', 'Use `key::value` here', 'outside::card'].join('\n');
+		expect(stampText(text, counter())).toBe(
+			['```md', 'inside::code', '```', 'Use `key::value` here', 'outside::card %%rem:id0%%'].join('\n'),
+		);
+	});
+
 	it('keeps every card text intact and gives each card a distinct id', () => {
 		const text = 'a::1\nb::2\n\nf1\nf2\n??\nback\n\nc:::3';
 		const stamped = stampText(text);
