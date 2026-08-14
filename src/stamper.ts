@@ -6,8 +6,8 @@ import { parseCards } from './core/parser';
 
 /**
  * Returns the text with a fresh id token inserted for every unstamped card.
- * Single-line cards get the token at the end of the line; multi-line cards get it
- * on its own line directly above the block.
+ * Single-line basic and cloze cards get the token at the end of the line;
+ * multi-line basic cards get it on their own line directly above the block.
  */
 export function stampText(text: string, mint: () => string = newCardId): string {
 	const unstamped = parseCards(text).filter((card) => card.id === null);

@@ -16,17 +16,22 @@ import { foldEvents, makeFsrs } from './scheduler';
 const f = makeFsrs(0.9);
 const now = new Date('2026-01-10T12:00:00.000Z');
 
-function card(id: string | null, overrides: Partial<NoteCard> = {}): NoteCard {
+function card(id: string | null, overrides: Partial<NoteCard> & { reversed?: boolean } = {}): NoteCard {
+	const { reversed = false, ...noteOverrides } = overrides;
+	const front = `front of ${id}`;
+	const back = `back of ${id}`;
 	return {
 		id,
-		front: `front of ${id}`,
-		back: `back of ${id}`,
-		reversed: false,
+		kind: 'basic',
+		siblings: [
+			{ sub: 0, front, back },
+			...(reversed ? [{ sub: 1, front: back, back: front }] : []),
+		],
 		multiline: false,
 		line: 0,
 		path: 'note.md',
 		deck: 'deck',
-		...overrides,
+		...noteOverrides,
 	};
 }
 
@@ -198,6 +203,48 @@ describe('buildQueue', () => {
 		expect(forward.front).toBe('front of r');
 		expect(reverse.front).toBe('back of r');
 		expect(reverse.back).toBe('front of r');
+	});
+
+	it('queues explicitly rendered cloze siblings with their reserved indexes', () => {
+		const cloze = card('c', {
+			kind: 'cloze',
+			siblings: [
+				{ sub: 2, front: 'A […] C', back: 'A B C' },
+				{ sub: 4, front: 'A B […]', back: 'A B C' },
+			],
+		});
+		const queue = buildQueue([cloze], new Map(), now, { burySiblings: false });
+
+		expect(queue.map(({ sub, front, back }) => ({ sub, front, back })).sort((a, b) => a.sub - b.sub)).toEqual([
+			{ sub: 2, front: 'A […] C', back: 'A B C' },
+			{ sub: 4, front: 'A B […]', back: 'A B C' },
+		]);
+	});
+
+	it('keeps cloze schedules independent using their explicit sibling indexes', () => {
+		const cloze = card('c', {
+			kind: 'cloze',
+			siblings: [
+				{ sub: 2, front: 'A […] C', back: 'A B C' },
+				{ sub: 3, front: 'A B […]', back: 'A B C' },
+			],
+		});
+		const states = foldEvents(f, [
+			{
+				v: 1,
+				k: 'r',
+				i: 'review-cloze-one',
+				t: '2026-01-05T12:00:00.000Z',
+				c: 'c',
+				s: 2,
+				r: Rating.Good,
+				dr: 0.9,
+			},
+		]);
+		const queue = buildQueue([cloze], states, now, { burySiblings: false });
+
+		expect(queue.find((item) => item.sub === 2)?.state).not.toBeNull();
+		expect(queue.find((item) => item.sub === 3)?.state).toBeNull();
 	});
 
 	it('shuffles ties: new cards come out in varying order', () => {

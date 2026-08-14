@@ -31,8 +31,8 @@ describe('stampText', () => {
 		const stamped = stampText(text);
 		const before = parseCards(text);
 		const after = parseCards(stamped);
-		expect(after.map(({ front, back, reversed, multiline }) => ({ front, back, reversed, multiline }))).toEqual(
-			before.map(({ front, back, reversed, multiline }) => ({ front, back, reversed, multiline })),
+		expect(after.map(({ kind, siblings, multiline }) => ({ kind, siblings, multiline }))).toEqual(
+			before.map(({ kind, siblings, multiline }) => ({ kind, siblings, multiline })),
 		);
 		const ids = after.map((card) => card.id);
 		expect(ids.every((id) => id !== null)).toBe(true);
@@ -49,6 +49,15 @@ describe('stampText', () => {
 		expect(stampText('front\r\n?\r\nback', counter())).toBe('%%rem:id0%%\r\nfront\r\n?\r\nback');
 	});
 
+	it('stamps a cloze line once regardless of its sibling count', () => {
+		const text = 'The {{c1::capital of France}} is {{c2::Paris}}.';
+		const stamped = stampText(text, counter());
+
+		expect(stamped).toBe(`${text} %%rem:id0%%`);
+		expect(parseCards(stamped)[0]).toMatchObject({ id: 'id0', kind: 'cloze' });
+		expect(parseCards(stamped)[0].siblings).toHaveLength(2);
+	});
+
 	it('stamps the note content present when vault.process runs', async () => {
 		const mockApp = App.createConfigured__({ files: { 'note.md': 'old::card' } });
 		const app = mockApp.asOriginalType__();
@@ -58,7 +67,7 @@ describe('stampText', () => {
 		const stamped = await stampNote(app, file);
 
 		const [card] = parseCards(stamped);
-		expect(card).toMatchObject({ front: 'fresh', back: 'card' });
+		expect(card.siblings[0]).toMatchObject({ front: 'fresh', back: 'card' });
 		expect(card?.id).toMatch(/^[0-9a-z]{16}$/);
 		expect(await app.vault.read(file)).toBe(stamped);
 	});

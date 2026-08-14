@@ -14,6 +14,8 @@ deck: lang/spanish
 ---
 ```
 
+### Single-line cards
+
 A single-line card has its question and answer on one line, separated by `::`:
 
 ```markdown
@@ -26,6 +28,8 @@ Use `:::` to also create a card in the reverse direction:
 perro:::dog
 ```
 
+### Multi-line cards
+
 A multi-line card has `?` on its own line between the question and answer:
 
 ```markdown
@@ -36,10 +40,22 @@ La mano — feminine despite the -o ending.
 
 Use `??` to also create a card in the reverse direction.
 
+### Cloze cards
+
+A cloze card hides marked text in its surrounding context:
+
+```markdown
+The capital of {{c1::France}} is {{c2::Paris}}.
+```
+
+Each `cN` is a required, stable sibling number. Clozes are single-line.
+
+## Reviewing
+
 Click the **Remember: review** button in the left panel to start a review.
 You can also run `Remember: Review` command.
 
-### Multi-device sync
+## Multi-device sync
 
 When using Obsidian Sync, enable **Settings → Sync → Selective sync → Sync all other types** on every device.
 

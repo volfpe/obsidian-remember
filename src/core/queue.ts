@@ -18,9 +18,9 @@ export interface QueueItem {
 	path: string;
 	line: number;
 	cardId: string;
-	/** Sibling index. Reversed cards use 0 and 1; future card types may use more indexes. */
+	/** Stable sibling index supplied by the parsed card. */
 	sub: number;
-	/** Question/answer for this direction: sub 1 swaps the card's sides. */
+	/** Markdown rendered for this sibling's question and answer. */
 	front: string;
 	back: string;
 	/** Folded FSRS state; null = new (never rated). */
@@ -99,10 +99,6 @@ function compareStrings(a: string, b: string): number {
 	return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function subsOf(card: NoteCard): readonly number[] {
-	return card.reversed ? [0, 1] : [0];
-}
-
 function localDayBounds(now: Date): { start: number; end: number } {
 	const start = new Date(now);
 	start.setHours(0, 0, 0, 0);
@@ -147,7 +143,8 @@ function availableSiblings(
 ): AvailableSibling[] {
 	const available: AvailableSibling[] = [];
 	for (const card of cards) {
-		for (const sub of subsOf(card)) {
+		for (const sibling of card.siblings) {
+			const { sub } = sibling;
 			const key = card.id === null ? null : siblingKey(card.id, sub);
 			const state = key === null ? null : (states.get(key) ?? null);
 			if (state && state.due.getTime() > now.getTime()) continue;
@@ -156,8 +153,8 @@ function availableSiblings(
 				groupKey: card.id === null ? `unstamped:${card.path}:${card.line}` : `card:${card.id}`,
 				key,
 				sub,
-				front: sub === 0 ? card.front : card.back,
-				back: sub === 0 ? card.back : card.front,
+				front: sibling.front,
+				back: sibling.back,
 				state,
 				showAt: state ? state.due : now,
 			});
@@ -230,7 +227,7 @@ export function countDeckStats(
 	let introduced = 0;
 	let total = 0;
 	for (const card of cards) {
-		for (const sub of subsOf(card)) {
+		for (const { sub } of card.siblings) {
 			total++;
 			const key = card.id === null ? null : siblingKey(card.id, sub);
 			if (key !== null && introducedToday.has(key)) introduced++;

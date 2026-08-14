@@ -15,7 +15,7 @@ export interface ReviewEvent {
 	t: string;
 	/** Card id. */
 	c: string;
-	/** Sibling sub-index: 0 forward, 1 reverse. */
+	/** Sibling sub-index: 0 forward, 1 reverse, and cN cloze -> N + 1. */
 	s: number;
 	/** 1 Again, 2 Hard, 3 Good, 4 Easy. */
 	r: Grade;
