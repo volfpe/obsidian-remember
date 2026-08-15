@@ -194,6 +194,16 @@ button.remember-view-nav-item.is-active {
 	padding: 0;
 }
 
+.remember-view.remember-session-active,
+.remember-view.remember-session-active .remember-view-canvas,
+.remember-view.remember-session-active .remember-view-content {
+	background: color-mix(in srgb, var(--background-primary) 95%, var(--text-normal));
+}
+
+.remember-view.remember-session-active .remember-view-canvas {
+	width: 100%;
+}
+
 /* study home */
 
 .remember-study-page {
@@ -1110,7 +1120,7 @@ button.remember-undo:focus-visible {
 	}
 }
 
-@media (width <= 600px) {
+@container (width <= 600px) {
 	.remember-review {
 		flex-grow: 1;
 		margin-block: 0;
