@@ -25,6 +25,7 @@ export class CardsPage {
 	private groups: CardDeckGroup[] = [];
 	private selectedKey: string | null = null;
 	private showDetail = false;
+	private listScrollTop = 0;
 	private now = new Date();
 	private renderer = new Component();
 
@@ -45,6 +46,7 @@ export class CardsPage {
 		if (!items.some((item) => item.key === this.selectedKey)) {
 			this.selectedKey = items[0]?.key ?? null;
 			this.showDetail = false;
+			this.listScrollTop = 0;
 		}
 		this.renderCurrent();
 	}
@@ -69,6 +71,7 @@ export class CardsPage {
 		}
 
 		const list = page.createDiv({ cls: 'remember-card-list' });
+		list.scrollTop = this.listScrollTop;
 		const rows = list.createDiv({ cls: 'remember-card-rows' });
 		this.renderRows(rows, items);
 		const selected = items.find((item) => item.key === this.selectedKey) ?? items[0];
@@ -97,6 +100,7 @@ export class CardsPage {
 			);
 			row.createSpan({ cls: 'remember-card-due', text: dueLabel(item, this.now) });
 			row.addEventListener('click', () => {
+				this.listScrollTop = rows.parentElement?.scrollTop ?? 0;
 				this.selectedKey = item.key;
 				this.showDetail = true;
 				this.renderCurrent();

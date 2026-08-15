@@ -38,7 +38,9 @@ describe('Cards page', () => {
 		page.render(container, snapshot(), 'Language', { ...DEFAULT_SETTINGS });
 
 		const rows = Array.from(container.querySelectorAll<HTMLButtonElement>('.remember-card-row'));
+		const list = container.querySelector<HTMLElement>('.remember-card-list');
 		expect(rows).toHaveLength(2);
+		expect(list).not.toBeNull();
 		expect(container.querySelector('.remember-card-group-title')).toBeNull();
 		expect(rows[0].getAttribute('aria-current')).toBe('true');
 		expect(rows[0].textContent).toContain('New');
@@ -58,10 +60,16 @@ describe('Cards page', () => {
 			'line',
 		);
 
+		list!.scrollTop = 120;
 		rows[1].click();
 
 		expect(container.querySelector('.remember-card-metadata')?.textContent).toContain('Reverse');
 		expect(container.querySelector('.remember-cards-page')?.classList).toContain('is-detail');
+		expect(container.querySelector<HTMLElement>('.remember-card-list')?.scrollTop).toBe(120);
+
+		container.querySelector<HTMLButtonElement>('.remember-card-detail-back')?.click();
+
+		expect(container.querySelector<HTMLElement>('.remember-card-list')?.scrollTop).toBe(120);
 		page.unload();
 	});
 });
