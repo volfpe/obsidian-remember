@@ -1129,3 +1129,14 @@ button.remember-undo:focus-visible {
 		border-radius: 0;
 	}
 }
+
+/* Keep review controls above Obsidian's overlaid phone navbar. */
+.is-phone.is-floating-nav:not(.is-hidden-nav) .remember-footer {
+	padding-bottom: max(
+		8px,
+		calc(
+			var(--navbar-height, 0px) + var(--navbar-bottom-offset, var(--safe-area-inset-bottom, 0px)) -
+				var(--keyboard-height, 0px)
+		)
+	);
+}
