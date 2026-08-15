@@ -18,6 +18,34 @@ export const DEFAULT_SETTINGS: RememberSettings = {
 	newCardsPerDay: 20,
 };
 
+export function parseSettings(value: unknown): RememberSettings {
+	if (typeof value !== 'object' || value === null) return { ...DEFAULT_SETTINGS };
+	const stored = value as Record<string, unknown>;
+	return {
+		deckProperty: typeof stored.deckProperty === 'string' ? stored.deckProperty : DEFAULT_SETTINGS.deckProperty,
+		burySiblings:
+			typeof stored.burySiblings === 'boolean' ? stored.burySiblings : DEFAULT_SETTINGS.burySiblings,
+		limitNewCardsPerDay:
+			typeof stored.limitNewCardsPerDay === 'boolean'
+				? stored.limitNewCardsPerDay
+				: DEFAULT_SETTINGS.limitNewCardsPerDay,
+		newCardsPerDay:
+			typeof stored.newCardsPerDay === 'number' &&
+			Number.isInteger(stored.newCardsPerDay) &&
+			stored.newCardsPerDay >= 0 &&
+			stored.newCardsPerDay <= 9999
+				? stored.newCardsPerDay
+				: DEFAULT_SETTINGS.newCardsPerDay,
+		desiredRetention:
+			typeof stored.desiredRetention === 'number' &&
+			Number.isFinite(stored.desiredRetention) &&
+			stored.desiredRetention >= 0.7 &&
+			stored.desiredRetention <= 0.99
+				? stored.desiredRetention
+				: DEFAULT_SETTINGS.desiredRetention,
+	};
+}
+
 export function effectiveNewCardsPerDay(settings: RememberSettings): number {
 	return settings.limitNewCardsPerDay ? settings.newCardsPerDay : Number.POSITIVE_INFINITY;
 }

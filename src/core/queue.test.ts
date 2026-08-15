@@ -7,6 +7,7 @@ import {
 	dedupeById,
 	introducedTodaySiblingKeys,
 	isDescendantDeck,
+	returnsToCurrentSession,
 	reviewedTodaySiblingKeys,
 	selectCards,
 	type NoteCard,
@@ -55,6 +56,13 @@ describe('isDescendantDeck', () => {
 		expect(isDescendantDeck('lang', 'lang')).toBe(true);
 		expect(isDescendantDeck('lang/spanish', 'lang')).toBe(true);
 		expect(isDescendantDeck('language', 'lang')).toBe(false);
+	});
+});
+
+describe('returnsToCurrentSession', () => {
+	it('includes due times up to and including the ten-minute learn-ahead limit', () => {
+		expect(returnsToCurrentSession(new Date(now.getTime() + 10 * 60 * 1000), now)).toBe(true);
+		expect(returnsToCurrentSession(new Date(now.getTime() + 10 * 60 * 1000 + 1), now)).toBe(false);
 	});
 });
 

@@ -1,17 +1,29 @@
 import { Plugin } from 'obsidian';
 import { STRINGS } from './i18n';
 import { cleanOwnConflictCopies } from './log';
-import { DEFAULT_SETTINGS, RememberSettingTab, type RememberSettings } from './settings';
+import { parseSettings, RememberSettingTab, type RememberSettings } from './settings';
 import { hideTokens } from './ui/hide-tokens';
-import { ReviewModal } from './ui/review-modal';
+import { REMEMBER_VIEW_DEFINITION } from './ui/remember-view-definition';
+import { ReviewView } from './ui/review-view';
+import { TransientSingletonViewHost } from './ui/transient-singleton-view-host';
 
 export default class RememberPlugin extends Plugin {
 	settings!: RememberSettings;
+	private rememberViewHost!: TransientSingletonViewHost;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
-		this.addRibbonIcon('brain', STRINGS.plugin.reviewRibbon, () => this.openReview());
-		this.addCommand({ id: 'review', name: STRINGS.plugin.reviewCommand, callback: () => this.openReview() });
+		this.rememberViewHost = new TransientSingletonViewHost(
+			this.app.workspace,
+			REMEMBER_VIEW_DEFINITION,
+		);
+		this.rememberViewHost.install(this, (leaf) => new ReviewView(leaf, this.settings));
+		this.addRibbonIcon(REMEMBER_VIEW_DEFINITION.icon, STRINGS.plugin.openRibbon, () => void this.openReview());
+		this.addCommand({
+			id: 'open',
+			name: STRINGS.plugin.openCommand,
+			callback: () => void this.openReview(),
+		});
 		this.addSettingTab(new RememberSettingTab(this.app, this));
 		this.registerEditorExtension(hideTokens);
 		this.app.workspace.onLayoutReady(() => {
@@ -21,8 +33,12 @@ export default class RememberPlugin extends Plugin {
 		});
 	}
 
-	openReview(): void {
-		new ReviewModal(this.app, this.settings).open();
+	async openReview(): Promise<void> {
+		try {
+			await this.rememberViewHost.open();
+		} catch (error) {
+			console.error('Remember: could not open the review view', error);
+		}
 	}
 
 	async loadSettings(): Promise<void> {
@@ -32,32 +48,4 @@ export default class RememberPlugin extends Plugin {
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 	}
-}
-
-function parseSettings(value: unknown): RememberSettings {
-	if (typeof value !== 'object' || value === null) return { ...DEFAULT_SETTINGS };
-	const stored = value as Record<string, unknown>;
-	return {
-		deckProperty: typeof stored.deckProperty === 'string' ? stored.deckProperty : DEFAULT_SETTINGS.deckProperty,
-		burySiblings:
-			typeof stored.burySiblings === 'boolean' ? stored.burySiblings : DEFAULT_SETTINGS.burySiblings,
-		limitNewCardsPerDay:
-			typeof stored.limitNewCardsPerDay === 'boolean'
-				? stored.limitNewCardsPerDay
-				: DEFAULT_SETTINGS.limitNewCardsPerDay,
-		newCardsPerDay:
-			typeof stored.newCardsPerDay === 'number' &&
-			Number.isInteger(stored.newCardsPerDay) &&
-			stored.newCardsPerDay >= 0 &&
-			stored.newCardsPerDay <= 9999
-				? stored.newCardsPerDay
-				: DEFAULT_SETTINGS.newCardsPerDay,
-		desiredRetention:
-			typeof stored.desiredRetention === 'number' &&
-			Number.isFinite(stored.desiredRetention) &&
-			stored.desiredRetention >= 0.7 &&
-			stored.desiredRetention <= 0.99
-				? stored.desiredRetention
-				: DEFAULT_SETTINGS.desiredRetention,
-	};
 }

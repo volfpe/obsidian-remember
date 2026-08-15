@@ -52,8 +52,8 @@ Each `cN` is a required, stable sibling number. Clozes are single-line.
 
 ## Reviewing
 
-Click the **Remember: review** button in the left panel to start a review.
-You can also run `Remember: Review` command.
+Click the **Remember: open** button in the left panel to open Remember.
+You can also run the `Remember: Open` command.
 
 ## Multi-device sync
 

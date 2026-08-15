@@ -2,8 +2,9 @@
 
 export const STRINGS = {
 	plugin: {
-		reviewCommand: 'Review',
-		reviewRibbon: 'Remember: review',
+		viewTitle: 'Remember',
+		openCommand: 'Open',
+		openRibbon: 'Remember: open',
 	},
 	settings: {
 		deckPropertyName: 'Deck property name',
@@ -22,7 +23,6 @@ export const STRINGS = {
 		desiredRetentionDescription: 'Fsrs target recall probability. Higher means shorter intervals.',
 	},
 	review: {
-		title: 'Remember',
 		noCards: (deckProperty: string) =>
 			`No cards found. Give a note a "${deckProperty}" property and write "Question::Answer" lines.`,
 		deckHeader: 'Deck',
@@ -51,7 +51,9 @@ export const STRINGS = {
 		countHeaderAria: (label: string, tooltip: string) => `${label}: ${tooltip}`,
 		progressSeparator: '/',
 		progressAria: (current: number, total: number) => `Card ${current} of ${total}`,
+		backToDecks: 'Back to decks',
 		showAnswer: 'Show answer',
+		returnsThisSession: 'Returns later in this session',
 		ratings: {
 			again: 'Again',
 			hard: 'Hard',

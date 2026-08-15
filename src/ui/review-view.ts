@@ -1,6 +1,16 @@
-// One modal, desktop and mobile: deck list -> card front -> card back.
+// One transient workspace view, desktop and mobile: deck list -> card front -> card back.
 
-import { Component, MarkdownRenderer, Modal, Notice, setIcon, setTooltip, TFile, type App } from 'obsidian';
+import {
+	Component,
+	ItemView,
+	MarkdownRenderer,
+	Notice,
+	setIcon,
+	setTooltip,
+	TFile,
+	type IconName,
+	type WorkspaceLeaf,
+} from 'obsidian';
 import { Rating, type FSRS, type Grade } from 'ts-fsrs';
 import { appendEvent, appendUndoEvent, readEvents } from '../log';
 import type { ReviewEvent } from '../core/events';
@@ -18,7 +28,7 @@ import {
 	countDeckStats,
 	introducedTodaySiblingKeys,
 	isDescendantDeck,
-	LEARN_AHEAD_LIMIT_MS,
+	returnsToCurrentSession,
 	reviewedTodaySiblingKeys,
 	selectCards,
 	type DeckCounts,
@@ -28,6 +38,7 @@ import {
 import { STRINGS } from '../i18n';
 import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
 import { stampNote } from '../stamper';
+import { REMEMBER_VIEW_DEFINITION } from './remember-view-definition';
 
 interface DeckNode {
 	path: string;
@@ -42,7 +53,7 @@ interface UndoEntry {
 	advancedProgress: boolean;
 }
 
-export class ReviewModal extends Modal {
+export class ReviewView extends ItemView {
 	private fsrs: FSRS;
 	private phase: 'decks' | 'question' | 'answer' = 'decks';
 	private queue: QueueItem[] = [];
@@ -50,28 +61,63 @@ export class ReviewModal extends Modal {
 	private undoStack: UndoEntry[] = [];
 	private sessionTotal = 0;
 	private sessionCompleted = 0;
+	private sessionDeck: string | null = null;
 	private progressEl: HTMLElement | null = null;
 	private progressCurrentEl: HTMLElement | null = null;
 	private renderer = new Component();
 	private busy = false;
+	/** ItemView uses `titleEl` internally. */
+	private contentTitleEl: HTMLElement | null = null;
+	private bodyEl: HTMLElement | null = null;
 
 	constructor(
-		app: App,
+		leaf: WorkspaceLeaf,
 		private settings: RememberSettings,
 	) {
-		super(app);
+		super(leaf);
+		this.navigation = false;
 		this.fsrs = makeFsrs(settings.desiredRetention);
 	}
 
-	onOpen(): void {
-		this.modalEl.addClass('remember-modal');
-		this.renderer.load();
-		void this.showDeckList();
+	getViewType(): string {
+		return REMEMBER_VIEW_DEFINITION.type;
 	}
 
-	onClose(): void {
-		this.renderer.unload();
+	getDisplayText(): string {
+		return REMEMBER_VIEW_DEFINITION.displayText;
+	}
+
+	getIcon(): IconName {
+		return REMEMBER_VIEW_DEFINITION.icon;
+	}
+
+	getState(): Record<string, unknown> {
+		return {};
+	}
+
+	async onOpen(): Promise<void> {
+		this.contentEl.addClass('remember-view');
 		this.contentEl.empty();
+		const canvas = this.contentEl.createDiv({ cls: 'remember-view-canvas' });
+		const header = canvas.createDiv({ cls: 'remember-view-header' });
+		this.contentTitleEl = header.createDiv({ cls: 'remember-view-title' });
+		this.bodyEl = canvas.createDiv({ cls: 'remember-view-content' });
+		this.renderer.load();
+		await this.showDeckList();
+	}
+
+	onClose(): Promise<void> {
+		this.renderer.unload();
+		this.contentTitleEl = null;
+		this.bodyEl = null;
+		this.contentEl.empty();
+		this.contentEl.removeClass('remember-session-active');
+		this.contentEl.removeClass('remember-view');
+		return Promise.resolve();
+	}
+
+	private get body(): HTMLElement {
+		return this.bodyEl ?? this.contentEl;
 	}
 
 	// ---- deck list ----
@@ -80,19 +126,21 @@ export class ReviewModal extends Modal {
 		this.phase = 'decks';
 		this.current = null;
 		this.queue = [];
+		this.undoStack = [];
 		this.sessionTotal = 0;
 		this.sessionCompleted = 0;
+		this.sessionDeck = null;
 		this.progressEl = null;
 		this.progressCurrentEl = null;
-		this.titleEl.removeClass('remember-session-title');
-		this.setTitle(STRINGS.review.title);
-		this.contentEl.empty();
+		this.contentTitleEl?.setText(REMEMBER_VIEW_DEFINITION.displayText);
+		this.contentEl.removeClass('remember-session-active');
+		this.body.empty();
 
 		const selection = selectCards(await this.scanCards());
 		this.reportDuplicates(selection.dropped);
 		const cards = selection.kept;
 		if (cards.length === 0) {
-			this.contentEl.createEl('p', {
+			this.body.createEl('p', {
 				cls: 'remember-empty',
 				text: STRINGS.review.noCards(this.settings.deckProperty),
 			});
@@ -127,7 +175,7 @@ export class ReviewModal extends Modal {
 		const showWaiting = [...statsByDeck.values()].some((counts) => counts.waiting > 0);
 		const showBuried = [...statsByDeck.values()].some((counts) => counts.buried > 0);
 
-		const listEl = this.contentEl.createDiv({ cls: 'remember-decks' });
+		const listEl = this.body.createDiv({ cls: 'remember-decks' });
 		listEl.toggleClass('remember-has-waiting', showWaiting);
 		listEl.toggleClass('remember-has-buried', showBuried);
 		const header = listEl.createDiv({ cls: 'remember-deck-header' });
@@ -251,7 +299,8 @@ export class ReviewModal extends Modal {
 		this.sessionTotal = this.queue.length;
 		this.sessionCompleted = 0;
 		this.undoStack = [];
-		this.renderSessionTitle(deck);
+		this.sessionDeck = deck;
+		this.contentEl.addClass('remember-session-active');
 		this.showNext();
 	}
 
@@ -262,18 +311,22 @@ export class ReviewModal extends Modal {
 			void this.showDeckList(); // the session ends when the queue is empty
 			return;
 		}
-		this.updateProgress();
 		this.showQuestion();
 	}
 
-	private renderSessionTitle(deck: string): void {
-		this.titleEl.empty();
-		this.titleEl.addClass('remember-session-title');
-		this.titleEl.createSpan({ cls: 'remember-session-title-name', text: deck });
-		this.progressEl = this.titleEl.createSpan({ cls: 'remember-progress' });
+	private renderSessionHeader(parent: HTMLElement): void {
+		const header = parent.createDiv({ cls: 'remember-session-header' });
+		header.createSpan({ cls: 'remember-session-title-name', text: this.sessionDeck ?? '' });
+		this.progressEl = header.createSpan({ cls: 'remember-progress' });
 		this.progressCurrentEl = this.progressEl.createSpan({ cls: 'remember-progress-current' });
 		this.progressEl.createSpan({ cls: 'remember-progress-separator', text: STRINGS.review.progressSeparator });
 		this.progressEl.createSpan({ cls: 'remember-progress-total', text: String(this.sessionTotal) });
+		const back = header.createEl('button', { cls: 'clickable-icon remember-session-back' });
+		setIcon(back, 'x');
+		setTooltip(back, STRINGS.review.backToDecks);
+		back.setAttribute('aria-label', STRINGS.review.backToDecks);
+		back.addEventListener('click', () => void this.leaveSession());
+		this.updateProgress();
 	}
 
 	private updateProgress(): void {
@@ -283,11 +336,22 @@ export class ReviewModal extends Modal {
 		this.progressEl.setAttribute('aria-label', STRINGS.review.progressAria(current, this.sessionTotal));
 	}
 
+	private async leaveSession(): Promise<void> {
+		if (this.busy) return;
+		this.busy = true;
+		try {
+			await this.showDeckList();
+		} finally {
+			this.busy = false;
+		}
+	}
+
 	private showQuestion(): void {
 		if (!this.current) return;
 		this.phase = 'question';
-		this.contentEl.empty();
-		const review = this.contentEl.createDiv({ cls: 'remember-review' });
+		this.body.empty();
+		const review = this.body.createDiv({ cls: 'remember-review' });
+		this.renderSessionHeader(review);
 		const card = review.createDiv({ cls: 'remember-card-scroll' });
 		this.renderSide(card, this.current.front);
 		const footer = review.createDiv({ cls: 'remember-footer' });
@@ -301,8 +365,9 @@ export class ReviewModal extends Modal {
 	private showAnswer(): void {
 		if (!this.current) return;
 		this.phase = 'answer';
-		this.contentEl.empty();
-		const review = this.contentEl.createDiv({ cls: 'remember-review' });
+		this.body.empty();
+		const review = this.body.createDiv({ cls: 'remember-review' });
+		this.renderSessionHeader(review);
 		const card = review.createDiv({ cls: 'remember-card-scroll' });
 		this.renderSide(card, this.current.front);
 		card.createEl('hr', { cls: 'remember-divider' });
@@ -319,12 +384,20 @@ export class ReviewModal extends Modal {
 			[Rating.Easy, STRINGS.review.ratings.easy, 'easy'],
 		];
 		for (const [grade, label, tone] of ratings) {
+			const due = previews[grade];
 			const button = buttons.createEl('button', {
 				cls: `remember-response remember-rate remember-rate-${tone}`,
 			});
 			const text = button.createSpan({ cls: 'remember-response-text' });
 			text.createSpan({ cls: 'remember-response-label', text: label });
-			text.createSpan({ cls: 'remember-interval', text: formatInterval(now, previews[grade]) });
+			const details = text.createSpan({ cls: 'remember-response-details' });
+			details.createSpan({ cls: 'remember-interval', text: formatInterval(now, due) });
+			if (returnsToCurrentSession(due, now)) {
+				const returns = details.createSpan({ cls: 'remember-session-return' });
+				setIcon(returns, 'repeat-2');
+				setTooltip(returns, STRINGS.review.returnsThisSession);
+				returns.setAttribute('aria-label', STRINGS.review.returnsThisSession);
+			}
 			button.addEventListener('click', () => void this.rate(grade));
 		}
 	}
@@ -360,7 +433,7 @@ export class ReviewModal extends Modal {
 				return;
 			}
 			const next = applyRating(this.fsrs, item.state, when, grade);
-			const reentersSession = next.due.getTime() - when.getTime() <= LEARN_AHEAD_LIMIT_MS;
+			const reentersSession = returnsToCurrentSession(next.due, when);
 			this.undoStack.push({ item, event, advancedProgress: !reentersSession });
 			if (reentersSession) {
 				this.enqueue({ ...item, state: next, showAt: next.due }); // re-enters at its due position
@@ -391,7 +464,6 @@ export class ReviewModal extends Modal {
 			this.current = entry.item;
 			if (shown && !sameSibling(shown, entry.item)) this.enqueue(shown);
 			this.queue = this.queue.filter((queued) => !sameSibling(queued, entry.item)); // drop the re-entered copy
-			this.updateProgress();
 			this.showQuestion(); // the undone sibling is re-presented immediately
 		} finally {
 			this.busy = false;

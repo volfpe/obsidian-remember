@@ -8,6 +8,11 @@ import { siblingKey } from './scheduler';
 /** A rated sibling may re-enter the current session within this learn-ahead limit. */
 export const LEARN_AHEAD_LIMIT_MS = 10 * 60 * 1000;
 
+/** Whether a scheduled sibling is close enough to return in the current session. */
+export function returnsToCurrentSession(due: Date, now: Date): boolean {
+	return due.getTime() - now.getTime() <= LEARN_AHEAD_LIMIT_MS;
+}
+
 /** A parsed card located in the vault. */
 export interface NoteCard extends ParsedCard {
 	path: string;
