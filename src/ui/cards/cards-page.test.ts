@@ -1,5 +1,5 @@
 import { App } from 'obsidian-test-mocks/obsidian';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import type { NoteCard } from '../../core/queue';
 import { DEFAULT_SETTINGS } from '../../settings';
 import type { RememberSnapshot } from '../remember-snapshot';
@@ -29,8 +29,26 @@ function snapshot(): RememberSnapshot {
 	};
 }
 
+function emulateBrowserScrollClamping(): () => void {
+	const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
+	if (!descriptor) throw new Error('Expected Element.scrollTop to be configurable');
+	const positions = new WeakMap<Element, number>();
+	Object.defineProperty(Element.prototype, 'scrollTop', {
+		configurable: true,
+		get(this: Element): number {
+			return positions.get(this) ?? 0;
+		},
+		set(this: Element, value: number) {
+			positions.set(this, this.childElementCount === 0 ? 0 : value);
+		},
+	});
+	return () => Object.defineProperty(Element.prototype, 'scrollTop', descriptor);
+}
+
 describe('Cards page', () => {
 	it('renders sibling rows and updates the selected detail', () => {
+		const restoreScrollTop = emulateBrowserScrollClamping();
+		onTestFinished(restoreScrollTop);
 		const app = App.createConfigured__().asOriginalType__();
 		const page = new CardsPage(app);
 		const container = createDiv();

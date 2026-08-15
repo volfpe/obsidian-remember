@@ -71,9 +71,9 @@ export class CardsPage {
 		}
 
 		const list = page.createDiv({ cls: 'remember-card-list' });
-		list.scrollTop = this.listScrollTop;
 		const rows = list.createDiv({ cls: 'remember-card-rows' });
 		this.renderRows(rows, items);
+		list.scrollTop = this.listScrollTop;
 		const selected = items.find((item) => item.key === this.selectedKey) ?? items[0];
 		this.renderDetail(page, selected);
 	}
