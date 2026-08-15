@@ -532,6 +532,7 @@ button.remember-card-row {
 	background: transparent;
 	box-shadow: none;
 	color: var(--text-normal);
+	cursor: pointer;
 	text-align: left;
 }
 
