@@ -1,0 +1,87 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { NoteCard } from '../core/queue';
+import { DEFAULT_SETTINGS } from '../settings';
+import type { RememberSnapshot } from './remember-snapshot';
+import { renderDeckChooser, renderDeckStudyPage } from './study-page';
+
+const now = new Date('2026-08-15T12:00:00.000Z');
+
+function snapshot(): RememberSnapshot {
+	const cards: NoteCard[] = [
+		{
+			id: null,
+			kind: 'basic',
+			multiline: false,
+			line: 1,
+			path: 'language/spanish.md',
+			deck: 'Language/Spanish',
+			siblings: [{ sub: 0, front: 'hola', back: 'hello' }],
+		},
+	];
+	return {
+		loadedAt: now,
+		cards,
+		events: [],
+		states: new Map(),
+		issues: { duplicates: [], invalidDeckPaths: [] },
+	};
+}
+
+describe('deck-first study pages', () => {
+	it('allows choosing a deck even when its new cards are waiting', () => {
+		const parent = createDiv();
+		const selectDeck = vi.fn();
+		renderDeckChooser(
+			parent,
+			snapshot(),
+			{ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 },
+			selectDeck,
+			now,
+		);
+
+		const rows = Array.from(parent.querySelectorAll<HTMLButtonElement>('.remember-deck-row'));
+		expect(rows.map((row) => row.querySelector('.remember-deck-name')?.textContent)).toEqual([
+			'Language',
+			'Spanish',
+		]);
+		expect(rows[0].disabled).toBe(false);
+		expect(parent.querySelector('.remember-count-waiting')?.getAttribute('aria-label')).toContain(
+			'held for a future day by the daily limit',
+		);
+		rows[0].click();
+		expect(selectDeck).toHaveBeenCalledWith('Language');
+	});
+
+	it('starts review from the selected deck page and hides the action when nothing is ready', () => {
+		const parent = createDiv();
+		const start = vi.fn();
+		renderDeckStudyPage(
+			parent,
+			snapshot(),
+			{ ...DEFAULT_SETTINGS },
+			'Language',
+			start,
+			now,
+		);
+		const button = parent.querySelector<HTMLButtonElement>('.remember-start-review')!;
+		expect(button.disabled).toBe(false);
+		expect(parent.querySelector('.remember-deck-ready-detail')).toBeNull();
+		expect(
+			parent.querySelector('.remember-deck-status-due')?.getAttribute('aria-label'),
+		).toContain('Cards scheduled for review now.');
+		expect(parent.textContent).toContain('Upcoming 14 days');
+		button.click();
+		expect(start).toHaveBeenCalledOnce();
+
+		renderDeckStudyPage(
+			parent,
+			snapshot(),
+			{ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 },
+			'Language',
+			start,
+			now,
+		);
+		expect(parent.querySelector('.remember-start-review')).toBeNull();
+		expect(parent.textContent).toContain('No cards to review');
+	});
+});

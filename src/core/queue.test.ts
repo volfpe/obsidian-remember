@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ReviewEvent } from './events';
 import {
 	buildQueue,
+	classifyDeckSiblings,
 	countDeckStats,
 	dedupeById,
 	introducedTodaySiblingKeys,
@@ -143,6 +144,34 @@ describe('countDeckStats', () => {
 		expect(
 			countDeckStats([card('a', { reversed: true })], new Map(), now, { burySiblings: false }),
 		).toEqual({ due: 0, new: 2, waiting: 0, buried: 0, total: 2 });
+	});
+});
+
+describe('classifyDeckSiblings', () => {
+	it('separates due, scheduled, new, waiting, and buried siblings', () => {
+		const states = statesAfterGood([
+			['due', '2026-01-08T12:00:00.000Z'],
+			['scheduled', '2026-01-10T11:59:00.000Z'],
+		]);
+		const availability = classifyDeckSiblings(
+			[
+				card('due'),
+				card('scheduled'),
+				card('paired', { reversed: true }),
+				card('waiting'),
+			],
+			states,
+			now,
+			{ newCardsPerDay: 1 },
+		);
+
+		expect(Object.fromEntries(availability)).toEqual({
+			'due#0': 'due',
+			'scheduled#0': 'scheduled',
+			'paired#0': 'new',
+			'paired#1': 'buried',
+			'waiting#0': 'waiting',
+		});
 	});
 });
 

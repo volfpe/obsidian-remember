@@ -45,6 +45,8 @@ export interface DeckCounts {
 	total: number;
 }
 
+export type CardAvailability = 'due' | 'new' | 'waiting' | 'buried' | 'scheduled';
+
 export interface DeckStatsOptions {
 	introducedToday?: ReadonlySet<string>;
 	reviewedToday?: ReadonlySet<string>;
@@ -68,6 +70,10 @@ interface AvailableSibling {
 	back: string;
 	state: FsrsCard | null;
 	showAt: Date;
+}
+
+export function noteSiblingKey(card: NoteCard, sub: number): string {
+	return card.id === null ? `unstamped:${card.path}:${card.line}:${sub}` : siblingKey(card.id, sub);
 }
 
 export function isDescendantDeck(deck: string, ancestor: string): boolean {
@@ -141,19 +147,18 @@ export function reviewedTodaySiblingKeys(events: ReviewEvent[], now: Date): Set<
 	return reviewed;
 }
 
-function availableSiblings(
+function allSiblings(
 	cards: NoteCard[],
 	states: Map<string, FsrsCard>,
 	now: Date,
 ): AvailableSibling[] {
-	const available: AvailableSibling[] = [];
+	const siblings: AvailableSibling[] = [];
 	for (const card of cards) {
 		for (const sibling of card.siblings) {
 			const { sub } = sibling;
 			const key = card.id === null ? null : siblingKey(card.id, sub);
 			const state = key === null ? null : (states.get(key) ?? null);
-			if (state && state.due.getTime() > now.getTime()) continue;
-			available.push({
+			siblings.push({
 				card,
 				groupKey: card.id === null ? `unstamped:${card.path}:${card.line}` : `card:${card.id}`,
 				key,
@@ -165,7 +170,17 @@ function availableSiblings(
 			});
 		}
 	}
-	return available;
+	return siblings;
+}
+
+function availableSiblings(
+	cards: NoteCard[],
+	states: Map<string, FsrsCard>,
+	now: Date,
+): AvailableSibling[] {
+	return allSiblings(cards, states, now).filter(
+		(sibling) => sibling.state === null || sibling.showAt.getTime() <= now.getTime(),
+	);
 }
 
 /** Selects at most one not-yet-reviewed-today sibling from each group. */
@@ -173,8 +188,8 @@ function applySiblingBurying(
 	available: AvailableSibling[],
 	reviewedToday: ReadonlySet<string>,
 	burySiblings: boolean,
-): { selected: AvailableSibling[]; buried: number } {
-	if (!burySiblings) return { selected: available, buried: 0 };
+): { selected: AvailableSibling[]; buried: AvailableSibling[] } {
+	if (!burySiblings) return { selected: available, buried: [] };
 	const reviewedGroups = new Set<string>();
 	for (const key of reviewedToday) {
 		const separator = key.lastIndexOf('#');
@@ -189,22 +204,79 @@ function applySiblingBurying(
 	}
 
 	const selected: AvailableSibling[] = [];
-	let buried = 0;
+	const buried: AvailableSibling[] = [];
 	for (const group of groups.values()) {
 		if (reviewedGroups.has(group[0].groupKey)) {
 			const alreadyReviewed = group.filter(
 				(sibling) => sibling.key !== null && reviewedToday.has(sibling.key),
 			);
 			selected.push(...alreadyReviewed);
-			buried += group.length - alreadyReviewed.length;
+			buried.push(
+				...group.filter(
+					(sibling) => sibling.key === null || !reviewedToday.has(sibling.key),
+				),
+			);
 			continue;
 		}
 
 		group.sort(compareSiblingPriority);
 		selected.push(group[0]);
-		buried += group.length - 1;
+		buried.push(...group.slice(1));
 	}
 	return { selected, buried };
+}
+
+/**
+ * Per-sibling availability in the selected deck scope. Unstamped new-card
+ * ordering is provisional until session start assigns persistent ids.
+ */
+export function classifyDeckSiblings(
+	cards: NoteCard[],
+	states: Map<string, FsrsCard>,
+	now: Date,
+	options: DeckStatsOptions = {},
+): Map<string, CardAvailability> {
+	const {
+		introducedToday = new Set<string>(),
+		reviewedToday = new Set<string>(),
+		newCardsPerDay = Number.POSITIVE_INFINITY,
+		burySiblings = true,
+	} = options;
+	const availability = new Map<string, CardAvailability>();
+	for (const sibling of allSiblings(cards, states, now)) {
+		if (sibling.state !== null && sibling.showAt.getTime() > now.getTime()) {
+			availability.set(noteSiblingKey(sibling.card, sibling.sub), 'scheduled');
+		}
+	}
+
+	const selection = applySiblingBurying(
+		availableSiblings(cards, states, now),
+		reviewedToday,
+		burySiblings,
+	);
+	for (const sibling of selection.buried) {
+		availability.set(noteSiblingKey(sibling.card, sibling.sub), 'buried');
+	}
+	for (const sibling of selection.selected) {
+		if (sibling.state !== null) {
+			availability.set(noteSiblingKey(sibling.card, sibling.sub), 'due');
+		}
+	}
+
+	let introduced = 0;
+	for (const card of cards) {
+		for (const { sub } of card.siblings) {
+			if (card.id !== null && introducedToday.has(siblingKey(card.id, sub))) introduced++;
+		}
+	}
+	const remaining = Math.max(0, newCardsPerDay - introduced);
+	const unseen = selection.selected
+		.filter((sibling) => sibling.state === null)
+		.sort((a, b) => compareStrings(noteSiblingKey(a.card, a.sub), noteSiblingKey(b.card, b.sub)));
+	for (const [index, sibling] of unseen.entries()) {
+		availability.set(noteSiblingKey(sibling.card, sibling.sub), index < remaining ? 'new' : 'waiting');
+	}
+	return availability;
 }
 
 /** A scheduled sibling wins over a new one; otherwise the earliest due/index wins. */
@@ -227,29 +299,24 @@ export function countDeckStats(
 		newCardsPerDay = Number.POSITIVE_INFINITY,
 		burySiblings = true,
 	} = options;
-	let due = 0;
-	let unseen = 0;
-	let introduced = 0;
 	let total = 0;
 	for (const card of cards) {
-		for (const { sub } of card.siblings) {
-			total++;
-			const key = card.id === null ? null : siblingKey(card.id, sub);
-			if (key !== null && introducedToday.has(key)) introduced++;
-		}
+		total += card.siblings.length;
 	}
-	const selection = applySiblingBurying(
-		availableSiblings(cards, states, now),
+	const availability = classifyDeckSiblings(cards, states, now, {
+		introducedToday,
 		reviewedToday,
+		newCardsPerDay,
 		burySiblings,
-	);
-	for (const sibling of selection.selected) {
-		if (sibling.state === null) unseen++;
-		else due++;
+	});
+	const counts = { due: 0, new: 0, waiting: 0, buried: 0 };
+	for (const value of availability.values()) {
+		if (value !== 'scheduled') counts[value]++;
 	}
-	const remaining = Math.max(0, newCardsPerDay - introduced);
-	const available = Math.min(unseen, remaining);
-	return { due, new: available, waiting: unseen - available, buried: selection.buried, total };
+	return {
+		...counts,
+		total,
+	};
 }
 
 /** Due siblings by due date ascending, then the oldest stamped new siblings. */

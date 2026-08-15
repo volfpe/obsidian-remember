@@ -1,82 +1,55 @@
-// One transient workspace view, desktop and mobile: deck list -> card front -> card back.
-
-import {
-	Component,
-	ItemView,
-	MarkdownRenderer,
-	Notice,
-	setIcon,
-	setTooltip,
-	TFile,
-	type IconName,
-	type WorkspaceLeaf,
-} from 'obsidian';
-import { Rating, type FSRS, type Grade } from 'ts-fsrs';
-import { appendEvent, appendUndoEvent, readEvents } from '../log';
-import type { ReviewEvent } from '../core/events';
-import { randomId } from '../core/id';
-import { parseCards } from '../core/parser';
-import {
-	applyRating,
-	foldEvents,
-	formatInterval,
-	makeFsrs,
-	previewDue,
-} from '../core/scheduler';
-import {
-	buildQueue,
-	countDeckStats,
-	introducedTodaySiblingKeys,
-	isDescendantDeck,
-	returnsToCurrentSession,
-	reviewedTodaySiblingKeys,
-	selectCards,
-	type DeckCounts,
-	type NoteCard,
-	type QueueItem,
-} from '../core/queue';
+import { ItemView, Notice, setIcon, setTooltip, type IconName, type WorkspaceLeaf } from 'obsidian';
+import { isDescendantDeck } from '../core/queue';
+import { makeFsrs } from '../core/scheduler';
 import { STRINGS } from '../i18n';
-import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
-import { stampNote } from '../stamper';
+import type { RememberSettings } from '../settings';
+import { CardsPage } from './cards/cards-page';
 import { REMEMBER_VIEW_DEFINITION } from './remember-view-definition';
+import {
+	RememberSnapshotRepository,
+	type RememberSnapshot,
+} from './remember-snapshot';
+import { ReviewSession } from './review-session';
+import { renderDeckChooser, renderDeckStudyPage } from './study-page';
 
-interface DeckNode {
-	path: string;
-	name: string;
-	children: DeckNode[];
-}
-
-interface UndoEntry {
-	/** The item as presented — its state is the pre-rating state. */
-	item: QueueItem;
-	event: ReviewEvent;
-	advancedProgress: boolean;
-}
+type RememberSection = 'study' | 'cards' | 'statistics';
+const IMPORT_ENABLED = false;
+const STATISTICS_TAB_ENABLED = false;
 
 export class ReviewView extends ItemView {
-	private fsrs: FSRS;
-	private phase: 'decks' | 'question' | 'answer' = 'decks';
-	private queue: QueueItem[] = [];
-	private current: QueueItem | null = null;
-	private undoStack: UndoEntry[] = [];
-	private sessionTotal = 0;
-	private sessionCompleted = 0;
-	private sessionDeck: string | null = null;
-	private progressEl: HTMLElement | null = null;
-	private progressCurrentEl: HTMLElement | null = null;
-	private renderer = new Component();
-	private busy = false;
-	/** ItemView uses `titleEl` internally. */
+	private snapshotRepository: RememberSnapshotRepository;
+	private snapshot: RememberSnapshot | null = null;
+	private section: RememberSection = 'study';
+	private selectedDeck: string | null = null;
 	private contentTitleEl: HTMLElement | null = null;
 	private bodyEl: HTMLElement | null = null;
+	private deckContextEl: HTMLElement | null = null;
+	private navEl: HTMLElement | null = null;
+	private refreshButtonEl: HTMLButtonElement | null = null;
+	private refreshGeneration = 0;
+	private startingSession = false;
+	private cardsPage: CardsPage | null = null;
+	private reviewSession: ReviewSession | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
 		private settings: RememberSettings,
+		private openSettings: () => void = () => undefined,
 	) {
 		super(leaf);
 		this.navigation = false;
-		this.fsrs = makeFsrs(settings.desiredRetention);
+		const fsrs = makeFsrs(settings.desiredRetention);
+		this.snapshotRepository = new RememberSnapshotRepository(this.app, settings, fsrs);
+		this.reviewSession = new ReviewSession(
+			this.app,
+			settings,
+			fsrs,
+			this.snapshotRepository,
+			() => {
+				this.startingSession = false;
+				return this.showStudy();
+			},
+		);
 	}
 
 	getViewType(): string {
@@ -101,15 +74,52 @@ export class ReviewView extends ItemView {
 		const canvas = this.contentEl.createDiv({ cls: 'remember-view-canvas' });
 		const header = canvas.createDiv({ cls: 'remember-view-header' });
 		this.contentTitleEl = header.createDiv({ cls: 'remember-view-title' });
+		this.refreshButtonEl = header.createEl('button', {
+			cls: 'clickable-icon remember-refresh',
+		});
+		setIcon(this.refreshButtonEl, 'refresh-cw');
+		setTooltip(this.refreshButtonEl, STRINGS.study.refresh);
+		this.refreshButtonEl.setAttribute('aria-label', STRINGS.study.refresh);
+		this.refreshButtonEl.addEventListener('click', () => void this.refreshData(true));
+		const settingsButton = header.createEl('button', {
+			cls: 'clickable-icon remember-settings',
+		});
+		setIcon(settingsButton, 'settings');
+		setTooltip(settingsButton, STRINGS.study.openSettings);
+		settingsButton.setAttribute('aria-label', STRINGS.study.openSettings);
+		settingsButton.addEventListener('click', this.openSettings);
+		if (IMPORT_ENABLED) this.renderImportButton(header);
+		this.deckContextEl = canvas.createDiv({ cls: 'remember-deck-context' });
+		this.navEl = canvas.createDiv({ cls: 'remember-view-nav' });
 		this.bodyEl = canvas.createDiv({ cls: 'remember-view-content' });
-		this.renderer.load();
-		await this.showDeckList();
+		this.cardsPage = new CardsPage(this.app);
+		this.reviewSession?.load();
+		this.contentTitleEl.setText(REMEMBER_VIEW_DEFINITION.displayText);
+		this.renderDeckContext();
+		this.renderNavigation();
+		this.renderCurrentSection();
+		await this.refreshData();
+	}
+
+	private renderImportButton(header: HTMLElement): void {
+		const importButton = header.createEl('button', { cls: 'remember-import' });
+		setIcon(importButton.createSpan({ cls: 'remember-import-icon' }), 'download');
+		importButton.createSpan({ cls: 'remember-import-label', text: STRINGS.study.import });
+		setTooltip(importButton, STRINGS.study.importComingSoon);
+		importButton.addEventListener('click', () => new Notice(STRINGS.study.importComingSoon));
 	}
 
 	onClose(): Promise<void> {
-		this.renderer.unload();
+		this.refreshGeneration++;
+		this.cardsPage?.unload();
+		this.reviewSession?.unload();
 		this.contentTitleEl = null;
 		this.bodyEl = null;
+		this.deckContextEl = null;
+		this.navEl = null;
+		this.refreshButtonEl = null;
+		this.snapshot = null;
+		this.selectedDeck = null;
 		this.contentEl.empty();
 		this.contentEl.removeClass('remember-session-active');
 		this.contentEl.removeClass('remember-view');
@@ -120,410 +130,173 @@ export class ReviewView extends ItemView {
 		return this.bodyEl ?? this.contentEl;
 	}
 
-	// ---- deck list ----
-
-	private async showDeckList(): Promise<void> {
-		this.phase = 'decks';
-		this.current = null;
-		this.queue = [];
-		this.undoStack = [];
-		this.sessionTotal = 0;
-		this.sessionCompleted = 0;
-		this.sessionDeck = null;
-		this.progressEl = null;
-		this.progressCurrentEl = null;
-		this.contentTitleEl?.setText(REMEMBER_VIEW_DEFINITION.displayText);
-		this.contentEl.removeClass('remember-session-active');
-		this.body.empty();
-
-		const selection = selectCards(await this.scanCards());
-		this.reportDuplicates(selection.dropped);
-		const cards = selection.kept;
-		if (cards.length === 0) {
-			this.body.createEl('p', {
-				cls: 'remember-empty',
-				text: STRINGS.review.noCards(this.settings.deckProperty),
-			});
-			return;
-		}
-		const events = await readEvents(this.app);
-		const states = foldEvents(this.fsrs, events);
-		const now = new Date();
-		const introducedToday = introducedTodaySiblingKeys(events, now);
-		const reviewedToday = reviewedTodaySiblingKeys(events, now);
-		const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
-		const tree = buildDeckTree(cards);
-		const statsByDeck = new Map<string, DeckCounts>();
-		const collectStats = (node: DeckNode) => {
-			statsByDeck.set(
-				node.path,
-				countDeckStats(
-					cards.filter((card) => isDescendantDeck(card.deck, node.path)),
-					states,
-					now,
-					{
-						introducedToday,
-						reviewedToday,
-						newCardsPerDay,
-						burySiblings: this.settings.burySiblings,
-					},
-				),
-			);
-			for (const child of node.children) collectStats(child);
-		};
-		for (const node of tree) collectStats(node);
-		const showWaiting = [...statsByDeck.values()].some((counts) => counts.waiting > 0);
-		const showBuried = [...statsByDeck.values()].some((counts) => counts.buried > 0);
-
-		const listEl = this.body.createDiv({ cls: 'remember-decks' });
-		listEl.toggleClass('remember-has-waiting', showWaiting);
-		listEl.toggleClass('remember-has-buried', showBuried);
-		const header = listEl.createDiv({ cls: 'remember-deck-header' });
-		header.createSpan({ cls: 'remember-deck-header-name', text: STRINGS.review.deckHeader });
-		createCountHeader(header, STRINGS.review.counts.due);
-		createCountHeader(header, STRINGS.review.counts.new);
-		if (showWaiting) {
-			createCountHeader(header, STRINGS.review.counts.waiting);
-		}
-		if (showBuried) {
-			createCountHeader(header, STRINGS.review.counts.buried);
-		}
-		createCountHeader(header, STRINGS.review.counts.total);
-		const renderNode = (node: DeckNode, depth: number) => {
-			const counts = statsByDeck.get(node.path)!;
-			const row = listEl.createEl('button', { cls: 'remember-deck-row' });
-			row.style.setProperty('--remember-depth', String(depth));
-			row.createSpan({ cls: 'remember-deck-name', text: node.name });
-			const countsEl = row.createSpan({ cls: 'remember-deck-counts' });
-			countsEl.createSpan({ cls: 'remember-count-due', text: String(counts.due) });
-			countsEl.createSpan({ cls: 'remember-count-new', text: String(counts.new) });
-			if (showWaiting) {
-				countsEl.createSpan({ cls: 'remember-count-waiting', text: String(counts.waiting) });
-			}
-			if (showBuried) {
-				countsEl.createSpan({ cls: 'remember-count-buried', text: String(counts.buried) });
-			}
-			countsEl.createSpan({ cls: 'remember-count-total', text: String(counts.total) });
-			if (counts.due + counts.new === 0) row.disabled = true;
-			else row.addEventListener('click', () => void this.startSession(node.path));
-			for (const child of node.children) renderNode(child, depth + 1);
-		};
-		for (const node of tree) renderNode(node, 0);
-	}
-
-	/** Every card in every note carrying the deck property, including duplicate ids. */
-	private async scanCards(): Promise<NoteCard[]> {
-		const all: NoteCard[] = [];
-		for (const file of this.app.vault.getMarkdownFiles()) {
-			const noteDeck = this.deckOf(file);
-			if (noteDeck === null) continue;
-			try {
-				const text = await this.app.vault.cachedRead(file);
-				for (const card of parseCards(text)) all.push({ ...card, path: file.path, deck: noteDeck });
-			} catch (error) {
-				console.warn(`Remember: cannot read ${file.path}`, error);
-			}
-		}
-		return all;
-	}
-
-	private reportDuplicates(duplicates: NoteCard[]): void {
-		for (const dup of duplicates) {
-			new Notice(STRINGS.notices.duplicateCardId(dup.path));
-		}
-	}
-
-	private deckOf(file: TFile): string | null {
-		const raw: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.[this.settings.deckProperty];
-		if (raw === null || raw === undefined) return null;
-		if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') {
-			new Notice(STRINGS.notices.invalidDeckProperty(file.path));
-			return null;
-		}
-		const deck = String(raw).trim();
-		return deck === '' ? null : deck;
-	}
-
-	// ---- session ----
-
-	private async startSession(deck: string): Promise<void> {
-		const allCards = await this.scanCards();
-		const parsed = selectCards(allCards, deck).kept;
-		const allByPath = groupByPath(allCards);
-
-		// Stamp every unstamped card entering the session — one atomic vault.process per note.
-		const byPath = groupByPath(parsed);
-		for (const [path, fileCards] of byPath) {
-			if (fileCards.every((card) => card.id !== null)) continue;
-			const file = this.app.vault.getAbstractFileByPath(path);
-			if (!(file instanceof TFile)) {
-				allByPath.delete(path);
-				continue;
-			}
-			try {
-				const stamped = await stampNote(this.app, file);
-				// Replace the note's raw snapshot with exactly what was written, then deduplicate globally again below.
-				allByPath.set(
-					path,
-					parseCards(stamped).map((card) => ({ ...card, path, deck: fileCards[0].deck })),
-				);
-			} catch (error) {
-				console.warn(`Remember: could not stamp ${path}; its unstamped cards sit this session out`, error);
-			}
-		}
-
-		const selection = selectCards([...allByPath.values()].flat(), deck);
-		this.reportDuplicates(selection.dropped);
-		const events = await readEvents(this.app);
-		const states = foldEvents(this.fsrs, events);
-		const now = new Date();
-		const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
-		const introducedToday = introducedTodaySiblingKeys(events, now);
-		const reviewedToday = reviewedTodaySiblingKeys(events, now);
-		const counts = countDeckStats(
-			selection.kept,
-			states,
-			now,
-			{
-				introducedToday,
-				reviewedToday,
-				newCardsPerDay,
-				burySiblings: this.settings.burySiblings,
-			},
-		);
-		this.queue = buildQueue(selection.kept, states, now, {
-			maxNewCards: counts.new,
-			reviewedToday,
-			burySiblings: this.settings.burySiblings,
-		});
-		this.sessionTotal = this.queue.length;
-		this.sessionCompleted = 0;
-		this.undoStack = [];
-		this.sessionDeck = deck;
-		this.contentEl.addClass('remember-session-active');
-		this.showNext();
-	}
-
-	private showNext(): void {
-		// The queue is ordered by due time; the earliest pending card shows early instead of waiting.
-		this.current = this.queue.shift() ?? null;
-		if (this.current === null) {
-			void this.showDeckList(); // the session ends when the queue is empty
-			return;
-		}
-		this.showQuestion();
-	}
-
-	private renderSessionHeader(parent: HTMLElement): void {
-		const header = parent.createDiv({ cls: 'remember-session-header' });
-		header.createSpan({ cls: 'remember-session-title-name', text: this.sessionDeck ?? '' });
-		this.progressEl = header.createSpan({ cls: 'remember-progress' });
-		this.progressCurrentEl = this.progressEl.createSpan({ cls: 'remember-progress-current' });
-		this.progressEl.createSpan({ cls: 'remember-progress-separator', text: STRINGS.review.progressSeparator });
-		this.progressEl.createSpan({ cls: 'remember-progress-total', text: String(this.sessionTotal) });
-		const back = header.createEl('button', { cls: 'clickable-icon remember-session-back' });
-		setIcon(back, 'x');
-		setTooltip(back, STRINGS.review.backToDecks);
-		back.setAttribute('aria-label', STRINGS.review.backToDecks);
-		back.addEventListener('click', () => void this.leaveSession());
-		this.updateProgress();
-	}
-
-	private updateProgress(): void {
-		if (!this.progressEl || !this.progressCurrentEl) return;
-		const current = Math.min(this.sessionCompleted + 1, this.sessionTotal);
-		this.progressCurrentEl.setText(String(current));
-		this.progressEl.setAttribute('aria-label', STRINGS.review.progressAria(current, this.sessionTotal));
-	}
-
-	private async leaveSession(): Promise<void> {
-		if (this.busy) return;
-		this.busy = true;
-		try {
-			await this.showDeckList();
-		} finally {
-			this.busy = false;
-		}
-	}
-
-	private showQuestion(): void {
-		if (!this.current) return;
-		this.phase = 'question';
-		this.body.empty();
-		const review = this.body.createDiv({ cls: 'remember-review' });
-		this.renderSessionHeader(review);
-		const card = review.createDiv({ cls: 'remember-card-scroll' });
-		this.renderSide(card, this.current.front);
-		const footer = review.createDiv({ cls: 'remember-footer' });
-		const buttons = footer.createDiv({ cls: 'remember-buttons remember-question-buttons' });
-		const show = buttons.createEl('button', { cls: 'remember-response remember-show-answer' });
-		show.createSpan({ cls: 'remember-response-label', text: STRINGS.review.showAnswer });
-		show.addEventListener('click', () => this.showAnswer());
-		this.renderSessionActions(footer);
-	}
-
-	private showAnswer(): void {
-		if (!this.current) return;
-		this.phase = 'answer';
-		this.body.empty();
-		const review = this.body.createDiv({ cls: 'remember-review' });
-		this.renderSessionHeader(review);
-		const card = review.createDiv({ cls: 'remember-card-scroll' });
-		this.renderSide(card, this.current.front);
-		card.createEl('hr', { cls: 'remember-divider' });
-		this.renderSide(card, this.current.back);
-
-		const now = new Date();
-		const previews = previewDue(this.fsrs, this.current.state, now);
-		const footer = review.createDiv({ cls: 'remember-footer' });
-		const buttons = footer.createDiv({ cls: 'remember-buttons remember-rating-buttons' });
-		const ratings: [Grade, string, string][] = [
-			[Rating.Again, STRINGS.review.ratings.again, 'again'],
-			[Rating.Hard, STRINGS.review.ratings.hard, 'hard'],
-			[Rating.Good, STRINGS.review.ratings.good, 'good'],
-			[Rating.Easy, STRINGS.review.ratings.easy, 'easy'],
+	private renderNavigation(): void {
+		if (!this.navEl) return;
+		this.navEl.empty();
+		this.navEl.toggleClass('is-hidden', this.selectedDeck === null);
+		if (this.selectedDeck === null) return;
+		const sections: [RememberSection, string][] = [
+			['study', STRINGS.study.tabs.study],
+			['cards', STRINGS.study.tabs.cards],
 		];
-		for (const [grade, label, tone] of ratings) {
-			const due = previews[grade];
-			const button = buttons.createEl('button', {
-				cls: `remember-response remember-rate remember-rate-${tone}`,
+		if (STATISTICS_TAB_ENABLED) {
+			sections.push(['statistics', STRINGS.study.tabs.statistics]);
+		}
+		for (const [section, label] of sections) {
+			const button = this.navEl.createEl('button', {
+				cls: 'remember-view-nav-item',
+				text: label,
 			});
-			const text = button.createSpan({ cls: 'remember-response-text' });
-			text.createSpan({ cls: 'remember-response-label', text: label });
-			const details = text.createSpan({ cls: 'remember-response-details' });
-			details.createSpan({ cls: 'remember-interval', text: formatInterval(now, due) });
-			if (returnsToCurrentSession(due, now)) {
-				const returns = details.createSpan({ cls: 'remember-session-return' });
-				setIcon(returns, 'repeat-2');
-				setTooltip(returns, STRINGS.review.returnsThisSession);
-				returns.setAttribute('aria-label', STRINGS.review.returnsThisSession);
-			}
-			button.addEventListener('click', () => void this.rate(grade));
+			const active = section === this.section;
+			button.toggleClass('is-active', active);
+			button.setAttribute('aria-current', active ? 'page' : 'false');
+			button.addEventListener('click', () => this.showSection(section));
 		}
 	}
 
-	private renderSide(parent: HTMLElement, markdown: string): void {
-		const el = parent.createDiv({ cls: 'remember-card-side markdown-rendered' });
-		void MarkdownRenderer.render(this.app, markdown, el, this.current?.path ?? '', this.renderer);
+	private renderDeckContext(): void {
+		const context = this.deckContextEl;
+		if (!context) return;
+		context.empty();
+		context.toggleClass('is-hidden', this.selectedDeck === null);
+		if (this.selectedDeck === null) return;
+		const back = context.createEl('button', { cls: 'clickable-icon remember-back-to-decks' });
+		setIcon(back, 'arrow-left');
+		setTooltip(back, STRINGS.study.backToDecks);
+		back.setAttribute('aria-label', STRINGS.study.backToDecks);
+		back.addEventListener('click', () => this.clearDeck());
+		context.createDiv({ cls: 'remember-selected-deck', text: this.selectedDeck });
 	}
 
-	// ---- actions ----
+	private selectDeck(deck: string): void {
+		if (this.startingSession || this.reviewSession?.active) return;
+		this.selectedDeck = deck;
+		this.section = 'study';
+		this.renderDeckContext();
+		this.renderNavigation();
+		this.renderCurrentSection();
+	}
 
-	private async rate(grade: Grade): Promise<void> {
-		const item = this.current;
-		if (!item || this.phase !== 'answer' || this.busy) return;
-		this.busy = true;
+	private clearDeck(): void {
+		if (this.startingSession || this.reviewSession?.active) return;
+		this.selectedDeck = null;
+		this.section = 'study';
+		this.renderDeckContext();
+		this.renderNavigation();
+		this.renderCurrentSection();
+	}
+
+	private showSection(section: RememberSection): void {
+		if (this.selectedDeck === null || this.startingSession || this.reviewSession?.active) return;
+		this.section = section;
+		this.renderNavigation();
+		this.renderCurrentSection();
+	}
+
+	private renderCurrentSection(): void {
+		const snapshot = this.snapshot;
+		if (snapshot === null) {
+			this.body.empty();
+			this.body.createEl('p', { cls: 'remember-empty', text: STRINGS.study.loading });
+			return;
+		}
+		const deck = this.selectedDeck;
+		if (deck === null) {
+			renderDeckChooser(this.body, snapshot, this.settings, (selected) => this.selectDeck(selected));
+			return;
+		}
+		if (this.section === 'study') {
+			renderDeckStudyPage(this.body, snapshot, this.settings, deck, () => void this.startSession());
+			return;
+		}
+		if (this.section === 'cards') {
+			this.cardsPage?.render(this.body, snapshot, deck, this.settings);
+			return;
+		}
+		this.body.empty();
+		const page = this.body.createDiv({ cls: 'remember-placeholder-page' });
+		page.createEl('h2', { text: STRINGS.study.tabs.statistics });
+		page.createEl('p', { text: STRINGS.study.placeholders.statistics });
+	}
+
+	private async refreshData(notifyWhenComplete = false): Promise<void> {
+		if (this.startingSession || this.reviewSession?.active) return;
+		const generation = ++this.refreshGeneration;
+		this.setRefreshing(true);
 		try {
-			const when = new Date();
-			const event: ReviewEvent = {
-				v: 1,
-				k: 'r',
-				i: randomId(),
-				t: when.toISOString(),
-				c: item.cardId,
-				s: item.sub,
-				r: grade,
-				dr: this.fsrs.parameters.request_retention,
-			};
-			try {
-				await appendEvent(this.app, event);
-			} catch (error) {
-				// A review is never silently lost: no advance, the session pauses on this card.
-				new Notice(STRINGS.notices.couldNotSaveReview(error));
-				return;
+			const snapshot = await this.snapshotRepository.load();
+			if (generation !== this.refreshGeneration || this.reviewSession?.active) return;
+			this.snapshot = snapshot;
+			this.reportSnapshotIssues(snapshot);
+			const selectedDeck = this.selectedDeck;
+			if (
+				selectedDeck !== null &&
+				!snapshot.cards.some((card) => isDescendantDeck(card.deck, selectedDeck))
+			) {
+				this.selectedDeck = null;
+				this.section = 'study';
 			}
-			const next = applyRating(this.fsrs, item.state, when, grade);
-			const reentersSession = returnsToCurrentSession(next.due, when);
-			this.undoStack.push({ item, event, advancedProgress: !reentersSession });
-			if (reentersSession) {
-				this.enqueue({ ...item, state: next, showAt: next.due }); // re-enters at its due position
-			} else {
-				this.sessionCompleted++;
+			this.renderDeckContext();
+			this.renderNavigation();
+			this.renderCurrentSection();
+			if (notifyWhenComplete) new Notice(STRINGS.notices.refreshComplete);
+		} catch (error) {
+			if (generation !== this.refreshGeneration) return;
+			console.warn('Remember: refresh failed', error);
+			new Notice(STRINGS.notices.couldNotRefresh(error));
+			if (this.snapshot === null) {
+				this.body.empty();
+				this.body.createEl('p', { cls: 'remember-empty', text: STRINGS.study.refreshFailed });
 			}
-			this.showNext();
 		} finally {
-			this.busy = false;
+			if (generation === this.refreshGeneration) this.setRefreshing(false);
 		}
 	}
 
-	private async undo(): Promise<void> {
-		if (this.busy) return;
-		const entry = this.undoStack[this.undoStack.length - 1];
-		this.busy = true;
+	private setRefreshing(refreshing: boolean): void {
+		if (this.refreshButtonEl) {
+			this.refreshButtonEl.disabled = refreshing;
+			this.refreshButtonEl.toggleClass('is-loading', refreshing);
+		}
+	}
+
+	private async startSession(): Promise<void> {
+		if (this.startingSession || this.reviewSession?.active) return;
+		const deck = this.selectedDeck;
+		if (deck === null) return;
+		const session = this.reviewSession;
+		if (!session) return;
+		this.startingSession = true;
+		this.refreshGeneration++;
+		this.contentEl.addClass('remember-session-active');
+		this.body.empty();
+		this.body.createEl('p', { cls: 'remember-empty', text: STRINGS.review.preparing });
 		try {
-			try {
-				await appendUndoEvent(this.app, entry.event.i);
-			} catch (error) {
-				console.warn('Remember: undo failed', error);
-				new Notice(STRINGS.notices.couldNotSaveUndo(error));
-				return;
-			}
-			this.undoStack.pop();
-			if (entry.advancedProgress) this.sessionCompleted--;
-			const shown = this.current;
-			this.current = entry.item;
-			if (shown && !sameSibling(shown, entry.item)) this.enqueue(shown);
-			this.queue = this.queue.filter((queued) => !sameSibling(queued, entry.item)); // drop the re-entered copy
-			this.showQuestion(); // the undone sibling is re-presented immediately
+			await session.start(this.body, deck);
+		} catch (error) {
+			console.warn('Remember: could not start review session', error);
+			new Notice(STRINGS.notices.couldNotStartSession(error));
+			await this.showStudy();
 		} finally {
-			this.busy = false;
+			this.startingSession = false;
 		}
 	}
 
-	private renderSessionActions(parent: HTMLElement): void {
-		if (this.undoStack.length === 0) return;
-		const actions = parent.createDiv({ cls: 'remember-actions' });
-		const undo = actions.createEl('button', { cls: 'clickable-icon remember-undo' });
-		setIcon(undo, 'undo-2');
-		undo.setAttribute('aria-label', STRINGS.review.undoAria);
-		undo.addEventListener('click', () => void this.undo());
+	private async showStudy(): Promise<void> {
+		this.section = 'study';
+		this.contentEl.removeClass('remember-session-active');
+		this.renderDeckContext();
+		this.renderNavigation();
+		this.renderCurrentSection();
+		await this.refreshData();
 	}
 
-	/** Inserts keeping showAt order, after any equal positions. */
-	private enqueue(item: QueueItem): void {
-		const index = this.queue.findIndex((queued) => queued.showAt.getTime() > item.showAt.getTime());
-		if (index === -1) this.queue.push(item);
-		else this.queue.splice(index, 0, item);
-	}
-
-}
-
-function createCountHeader(parent: HTMLElement, copy: { label: string; tooltip: string }): void {
-	const header = parent.createSpan({ cls: 'remember-deck-header-count', text: copy.label });
-	setTooltip(header, copy.tooltip);
-	header.setAttribute('aria-label', STRINGS.review.countHeaderAria(copy.label, copy.tooltip));
-}
-
-function sameSibling(a: QueueItem, b: QueueItem): boolean {
-	return a.cardId === b.cardId && a.sub === b.sub;
-}
-
-function groupByPath(cards: NoteCard[]): Map<string, NoteCard[]> {
-	const byPath = new Map<string, NoteCard[]>();
-	for (const card of cards) {
-		const fileCards = byPath.get(card.path);
-		if (fileCards) fileCards.push(card);
-		else byPath.set(card.path, [card]);
-	}
-	return byPath;
-}
-
-function buildDeckTree(cards: NoteCard[]): DeckNode[] {
-	const roots: DeckNode[] = [];
-	const byPath = new Map<string, DeckNode>();
-	for (const deck of [...new Set(cards.map((card) => card.deck))].sort()) {
-		let path = '';
-		let siblings = roots;
-		for (const part of deck.split('/')) {
-			path = path === '' ? part : `${path}/${part}`;
-			let node = byPath.get(path);
-			if (!node) {
-				node = { path, name: part, children: [] };
-				byPath.set(path, node);
-				siblings.push(node);
-			}
-			siblings = node.children;
+	private reportSnapshotIssues(snapshot: RememberSnapshot): void {
+		for (const duplicate of snapshot.issues.duplicates) {
+			new Notice(STRINGS.notices.duplicateCardId(duplicate.path));
+		}
+		for (const path of snapshot.issues.invalidDeckPaths) {
+			new Notice(STRINGS.notices.invalidDeckProperty(path));
 		}
 	}
-	return roots;
 }

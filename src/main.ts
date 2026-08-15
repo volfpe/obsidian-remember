@@ -1,4 +1,4 @@
-import { Plugin } from 'obsidian';
+import { Plugin, type App } from 'obsidian';
 import { STRINGS } from './i18n';
 import { cleanOwnConflictCopies } from './log';
 import { parseSettings, RememberSettingTab, type RememberSettings } from './settings';
@@ -17,7 +17,10 @@ export default class RememberPlugin extends Plugin {
 			this.app.workspace,
 			REMEMBER_VIEW_DEFINITION,
 		);
-		this.rememberViewHost.install(this, (leaf) => new ReviewView(leaf, this.settings));
+		this.rememberViewHost.install(
+			this,
+			(leaf) => new ReviewView(leaf, this.settings, () => this.openSettings()),
+		);
 		this.addRibbonIcon(REMEMBER_VIEW_DEFINITION.icon, STRINGS.plugin.openRibbon, () => void this.openReview());
 		this.addCommand({
 			id: 'open',
@@ -48,4 +51,17 @@ export default class RememberPlugin extends Plugin {
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 	}
+
+	private openSettings(): void {
+		const settings = (this.app as AppWithSettings).setting;
+		settings.open();
+		settings.openTabById(this.manifest.id);
+	}
+}
+
+interface AppWithSettings extends App {
+	setting: {
+		open(): void;
+		openTabById(id: string): void;
+	};
 }
