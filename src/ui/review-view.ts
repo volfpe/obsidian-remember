@@ -23,7 +23,7 @@ export class ReviewView extends ItemView {
 	private selectedDeck: string | null = null;
 	private contentTitleEl: HTMLElement | null = null;
 	private bodyEl: HTMLElement | null = null;
-	private deckContextEl: HTMLElement | null = null;
+	private backToDecksButtonEl: HTMLButtonElement | null = null;
 	private navEl: HTMLElement | null = null;
 	private refreshButtonEl: HTMLButtonElement | null = null;
 	private refreshGeneration = 0;
@@ -73,6 +73,13 @@ export class ReviewView extends ItemView {
 		this.contentEl.empty();
 		const canvas = this.contentEl.createDiv({ cls: 'remember-view-canvas' });
 		const header = canvas.createDiv({ cls: 'remember-view-header' });
+		this.backToDecksButtonEl = header.createEl('button', {
+			cls: 'clickable-icon remember-back-to-decks',
+		});
+		setIcon(this.backToDecksButtonEl, 'arrow-left');
+		setTooltip(this.backToDecksButtonEl, STRINGS.study.backToDecks);
+		this.backToDecksButtonEl.setAttribute('aria-label', STRINGS.study.backToDecks);
+		this.backToDecksButtonEl.addEventListener('click', () => this.clearDeck());
 		this.contentTitleEl = header.createDiv({ cls: 'remember-view-title' });
 		this.refreshButtonEl = header.createEl('button', {
 			cls: 'clickable-icon remember-refresh',
@@ -89,12 +96,10 @@ export class ReviewView extends ItemView {
 		settingsButton.setAttribute('aria-label', STRINGS.study.openSettings);
 		settingsButton.addEventListener('click', this.openSettings);
 		if (IMPORT_ENABLED) this.renderImportButton(header);
-		this.deckContextEl = canvas.createDiv({ cls: 'remember-deck-context' });
 		this.navEl = canvas.createDiv({ cls: 'remember-view-nav' });
 		this.bodyEl = canvas.createDiv({ cls: 'remember-view-content' });
 		this.cardsPage = new CardsPage(this.app);
 		this.reviewSession?.load();
-		this.contentTitleEl.setText(REMEMBER_VIEW_DEFINITION.displayText);
 		this.renderDeckContext();
 		this.renderNavigation();
 		this.renderCurrentSection();
@@ -115,7 +120,7 @@ export class ReviewView extends ItemView {
 		this.reviewSession?.unload();
 		this.contentTitleEl = null;
 		this.bodyEl = null;
-		this.deckContextEl = null;
+		this.backToDecksButtonEl = null;
 		this.navEl = null;
 		this.refreshButtonEl = null;
 		this.snapshot = null;
@@ -155,17 +160,10 @@ export class ReviewView extends ItemView {
 	}
 
 	private renderDeckContext(): void {
-		const context = this.deckContextEl;
-		if (!context) return;
-		context.empty();
-		context.toggleClass('is-hidden', this.selectedDeck === null);
-		if (this.selectedDeck === null) return;
-		const back = context.createEl('button', { cls: 'clickable-icon remember-back-to-decks' });
-		setIcon(back, 'arrow-left');
-		setTooltip(back, STRINGS.study.backToDecks);
-		back.setAttribute('aria-label', STRINGS.study.backToDecks);
-		back.addEventListener('click', () => this.clearDeck());
-		context.createDiv({ cls: 'remember-selected-deck', text: this.selectedDeck });
+		const hasSelectedDeck = this.selectedDeck !== null;
+		this.backToDecksButtonEl?.toggleClass('is-hidden', !hasSelectedDeck);
+		this.contentTitleEl?.toggleClass('is-hidden', !hasSelectedDeck);
+		this.contentTitleEl?.setText(this.selectedDeck ?? '');
 	}
 
 	private selectDeck(deck: string): void {

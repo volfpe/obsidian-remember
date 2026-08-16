@@ -35,6 +35,10 @@ describe('Remember shell', () => {
 
 		await view.onOpen();
 		expect(view.contentEl.querySelectorAll('.remember-view-nav-item')).toHaveLength(0);
+		expect(view.contentEl.querySelector('.remember-view-title')?.textContent).toBe('');
+		expect(view.contentEl.querySelector('.remember-back-to-decks')?.classList).toContain(
+			'is-hidden',
+		);
 
 		(view as unknown as { selectDeck(deck: string): void }).selectDeck('Language/Spanish');
 
@@ -43,8 +47,11 @@ describe('Remember shell', () => {
 		);
 		expect(tabs.map((tab) => tab.textContent)).toEqual(['Study', 'Cards']);
 		expect(tabs[0].getAttribute('aria-current')).toBe('page');
-		expect(view.contentEl.querySelector('.remember-selected-deck')?.textContent).toBe(
+		expect(view.contentEl.querySelector('.remember-view-title')?.textContent).toBe(
 			'Language/Spanish',
+		);
+		expect(view.contentEl.querySelector('.remember-back-to-decks')?.classList).not.toContain(
+			'is-hidden',
 		);
 	});
 

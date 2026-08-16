@@ -36,6 +36,11 @@
 	white-space: nowrap;
 }
 
+.remember-view-title.is-hidden,
+button.remember-back-to-decks.is-hidden {
+	display: none;
+}
+
 button.remember-refresh {
 	flex: 0 0 auto;
 	margin-left: auto;
@@ -82,32 +87,12 @@ button.remember-import {
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.remember-view-nav.is-hidden,
-.remember-deck-context.is-hidden {
+.remember-view-nav.is-hidden {
 	display: none;
-}
-
-.remember-deck-context {
-	display: flex;
-	flex: 0 0 auto;
-	align-items: center;
-	gap: 7px;
-	min-width: 0;
-	padding: 7px 12px 2px;
 }
 
 button.remember-back-to-decks {
 	flex: 0 0 auto;
-}
-
-.remember-selected-deck {
-	min-width: 0;
-	overflow: hidden;
-	color: var(--text-normal);
-	font-size: var(--font-ui-small);
-	font-weight: var(--font-semibold);
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 button.remember-view-nav-item {
@@ -143,7 +128,6 @@ button.remember-view-nav-item.is-active {
 }
 
 .remember-view.remember-session-active .remember-view-header,
-.remember-view.remember-session-active .remember-deck-context,
 .remember-view.remember-session-active .remember-view-nav {
 	display: none;
 }
