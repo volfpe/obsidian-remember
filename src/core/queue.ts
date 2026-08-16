@@ -295,8 +295,17 @@ export function classifyDeckSiblings(
 	const unseen = selection.selected
 		.filter((sibling) => sibling.state === null)
 		.sort((a, b) => compareStrings(noteSiblingKey(a.card, a.sub), noteSiblingKey(b.card, b.sub)));
+	const waitingGroups = new Set<string>();
 	for (const [index, sibling] of unseen.entries()) {
-		availability.set(noteSiblingKey(sibling.card, sibling.sub), index < remaining ? 'new' : 'waiting');
+		const status = index < remaining ? 'new' : 'waiting';
+		availability.set(noteSiblingKey(sibling.card, sibling.sub), status);
+		if (status === 'waiting') waitingGroups.add(sibling.groupKey);
+	}
+	// A sibling is not meaningfully buried when its entire unseen group is held by the daily limit.
+	for (const sibling of selection.buried) {
+		if (sibling.state === null && waitingGroups.has(sibling.groupKey)) {
+			availability.set(noteSiblingKey(sibling.card, sibling.sub), 'waiting');
+		}
 	}
 	return availability;
 }

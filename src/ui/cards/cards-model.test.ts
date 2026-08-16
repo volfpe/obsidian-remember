@@ -109,6 +109,34 @@ describe('Cards catalog', () => {
 		expect(item.availability).toBe('new');
 	});
 
+	it('shows every unseen sibling as waiting when the daily limit is exhausted', () => {
+		const data = snapshot([
+			{
+				id: 'waiting-card',
+				suspended: false,
+				kind: 'basic',
+				multiline: false,
+				line: 4,
+				path: 'language/dog.md',
+				deck: 'Language',
+				siblings: [
+					{ sub: 0, front: 'perro', back: 'dog' },
+					{ sub: 1, front: 'dog', back: 'perro' },
+				],
+			},
+		]);
+		data.states.clear();
+
+		const groups = buildCardDeckGroups(
+			data,
+			'Language',
+			{ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 },
+			new Date('2026-08-15T12:00:00.000Z'),
+		);
+
+		expect(groups[0].items.map((item) => item.availability)).toEqual(['waiting', 'waiting']);
+	});
+
 	it('includes descendant decks but excludes unrelated decks', () => {
 		const cards: NoteCard[] = [
 			{

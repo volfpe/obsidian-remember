@@ -132,17 +132,30 @@ describe('countDeckStats', () => {
 		});
 	});
 
-	it('separates siblings buried before the daily limit from waiting cards', () => {
+	it('marks every unseen sibling as waiting when its group is beyond the daily limit', () => {
 		const cards = [card('a', { reversed: true }), card('b', { reversed: true })];
 
 		expect(countDeckStats(cards, new Map(), now, { newCardsPerDay: 1 })).toEqual({
 			due: 0,
 			new: 1,
-			waiting: 1,
-			buried: 2,
+			waiting: 2,
+			buried: 1,
 			suspended: 0,
 			total: 4,
 		});
+		expect(
+			Object.fromEntries(classifyDeckSiblings(cards, new Map(), now, { newCardsPerDay: 1 })),
+		).toEqual({
+			'a#0': 'new',
+			'a#1': 'buried',
+			'b#0': 'waiting',
+			'b#1': 'waiting',
+		});
+		expect(
+			buildQueue(cards, new Map(), now, { maxNewCards: 1 }).map(
+				(item) => `${item.cardId}#${item.sub}`,
+			),
+		).toEqual(['a#0']);
 	});
 
 	it('counts every eligible sibling when burying is disabled', () => {
