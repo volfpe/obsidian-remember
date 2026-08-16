@@ -61,6 +61,7 @@ export const STRINGS = {
 			easy: 'Easy',
 		},
 		undoAria: 'Undo last review',
+		openDefinition: 'Open card definition',
 	},
 	study: {
 		backToDecks: 'Choose another deck',

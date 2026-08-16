@@ -112,6 +112,18 @@ describe('session progress', () => {
 		expect(session.sessionCompleted).toBe(0);
 	});
 
+	it('shows undo only before revealing the current card and keeps source available', async () => {
+		const { session } = makeHarness();
+
+		await session.rate(Rating.Easy);
+
+		expect(session.container?.querySelector('.remember-session-undo')).not.toBeNull();
+		expect(session.container?.querySelector('.remember-session-source')).not.toBeNull();
+		session.container?.querySelector<HTMLButtonElement>('.remember-show-answer')?.click();
+		expect(session.container?.querySelector('.remember-session-undo')).toBeNull();
+		expect(session.container?.querySelector('.remember-session-source')).not.toBeNull();
+	});
+
 	it('returns to Study when leaving early', async () => {
 		const { finished, session } = makeHarness();
 

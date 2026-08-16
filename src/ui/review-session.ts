@@ -27,6 +27,7 @@ import { STRINGS } from '../i18n';
 import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
 import { stampNote } from '../stamper';
 import type { RememberSnapshotRepository } from './remember-snapshot';
+import { openCardDefinition } from './open-card-definition';
 
 interface UndoEntry {
 	/** The item as presented — its state is the pre-rating state. */
@@ -156,7 +157,29 @@ export class ReviewSession extends Component {
 			text: STRINGS.review.progressSeparator,
 		});
 		this.progressEl.createSpan({ cls: 'remember-progress-total', text: String(this.sessionTotal) });
-		const back = header.createEl('button', { cls: 'clickable-icon remember-session-back' });
+		const actions = header.createDiv({ cls: 'remember-session-actions' });
+		if (this.phase === 'question' && this.undoStack.length > 0) {
+			const undo = actions.createEl('button', {
+				cls: 'clickable-icon remember-session-undo',
+			});
+			setIcon(undo, 'undo-2');
+			setTooltip(undo, STRINGS.review.undoAria);
+			undo.setAttribute('aria-label', STRINGS.review.undoAria);
+			undo.addEventListener('click', () => void this.undo());
+		}
+		const source = actions.createEl('button', {
+			cls: 'clickable-icon remember-session-source',
+		});
+		setIcon(source, 'file-pen-line');
+		setTooltip(source, STRINGS.review.openDefinition);
+		source.setAttribute('aria-label', STRINGS.review.openDefinition);
+		source.addEventListener('click', () => {
+			if (this.current) void openCardDefinition(this.app, this.current);
+		});
+		actions.createSpan({ cls: 'remember-session-action-divider', attr: { 'aria-hidden': 'true' } });
+		const back = actions.createEl('button', {
+			cls: 'clickable-icon remember-session-back',
+		});
 		setIcon(back, 'x');
 		setTooltip(back, STRINGS.review.backToDecks);
 		back.setAttribute('aria-label', STRINGS.review.backToDecks);
@@ -187,7 +210,6 @@ export class ReviewSession extends Component {
 		const show = buttons.createEl('button', { cls: 'remember-response remember-show-answer' });
 		show.createSpan({ cls: 'remember-response-label', text: STRINGS.review.showAnswer });
 		show.addEventListener('click', () => this.showAnswer());
-		this.renderSessionActions(footer);
 	}
 
 	private showAnswer(): void {
@@ -294,15 +316,6 @@ export class ReviewSession extends Component {
 		} finally {
 			this.busy = false;
 		}
-	}
-
-	private renderSessionActions(parent: HTMLElement): void {
-		if (this.undoStack.length === 0) return;
-		const actions = parent.createDiv({ cls: 'remember-actions' });
-		const undo = actions.createEl('button', { cls: 'clickable-icon remember-undo' });
-		setIcon(undo, 'undo-2');
-		undo.setAttribute('aria-label', STRINGS.review.undoAria);
-		undo.addEventListener('click', () => void this.undo());
 	}
 
 	private enqueue(item: QueueItem): void {

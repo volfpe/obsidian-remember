@@ -1,11 +1,8 @@
 import {
 	Component,
 	MarkdownRenderer,
-	MarkdownView,
-	Notice,
 	setIcon,
 	setTooltip,
-	TFile,
 	type App,
 } from 'obsidian';
 import { Rating, type Grade } from 'ts-fsrs';
@@ -13,6 +10,7 @@ import { formatInterval } from '../../core/scheduler';
 import { STRINGS } from '../../i18n';
 import type { RememberSettings } from '../../settings';
 import type { RememberSnapshot } from '../remember-snapshot';
+import { openCardDefinition } from '../open-card-definition';
 import {
 	buildCardDeckGroups,
 	cardStateKind,
@@ -166,7 +164,7 @@ export class CardsPage {
 		link.addEventListener('click', (event) => {
 			event.preventDefault();
 			event.stopPropagation();
-			void this.openDefinition(card);
+			void openCardDefinition(this.app, card);
 		});
 	}
 
@@ -193,25 +191,6 @@ export class CardsPage {
 			const row = list.createEl('li');
 			row.createSpan({ text: formatter.format(new Date(event.t)) });
 			row.createSpan({ cls: `remember-history-rating remember-history-rating-${event.r}`, text: ratingLabel(event.r) });
-		}
-	}
-
-	private async openDefinition(item: CardListItem): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(item.path);
-		if (!(file instanceof TFile)) {
-			new Notice(STRINGS.notices.cardDefinitionMissing(item.path));
-			return;
-		}
-		try {
-			const leaf = this.app.workspace.getLeaf('tab');
-			await leaf.openFile(file, { active: true });
-			if (leaf.view instanceof MarkdownView) {
-				const position = { line: item.line, ch: 0 };
-				leaf.view.editor.setCursor(position);
-				leaf.view.editor.scrollIntoView({ from: position, to: position }, true);
-			}
-		} catch (error) {
-			new Notice(STRINGS.notices.couldNotOpenDefinition(error));
 		}
 	}
 

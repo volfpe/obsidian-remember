@@ -148,9 +148,19 @@ button.remember-view-nav-item.is-active {
 	display: none;
 }
 
-.remember-session-back {
+.remember-session-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
 	flex: 0 0 auto;
 	margin-left: auto;
+}
+
+.remember-session-action-divider {
+	width: 1px;
+	height: 18px;
+	margin-inline: 2px;
+	background: var(--background-modifier-border);
 }
 
 .remember-session-title-name {
@@ -988,28 +998,6 @@ button.remember-rate-easy {
 
 button.remember-refresh.is-loading svg {
 	animation: remember-spin 700ms linear infinite;
-}
-
-.remember-actions {
-	position: absolute;
-	left: 2px;
-	bottom: calc(100% + 5px);
-}
-
-button.remember-undo {
-	width: 28px;
-	height: 28px;
-	padding: 5px;
-	border-radius: 50%;
-	color: var(--text-muted);
-	opacity: 0.48;
-	cursor: pointer;
-}
-
-button.remember-undo:hover,
-button.remember-undo:focus-visible {
-	color: var(--text-normal);
-	opacity: 1;
 }
 
 @container (width <= 650px) {
