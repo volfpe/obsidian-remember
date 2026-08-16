@@ -145,7 +145,7 @@ export class CardsPage {
 		createMetadata(metadata, STRINGS.cards.fields.due, dueLabel(item, this.now));
 
 		this.renderSide(scroll, STRINGS.cards.front, item.front, item.path);
-		this.renderSide(scroll, STRINGS.cards.answer, item.back, item.path);
+		this.renderSide(scroll, STRINGS.cards.back, item.back, item.path);
 		this.renderHistory(scroll, item);
 
 	}

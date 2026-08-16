@@ -12,7 +12,7 @@ function snapshot(): RememberSnapshot {
 			id: null,
 			suspended: false,
 			kind: 'basic',
-			multiline: false,
+			reverse: false,
 			line: 1,
 			path: 'language/spanish.md',
 			deck: 'Language/Spanish',
@@ -25,7 +25,7 @@ function snapshot(): RememberSnapshot {
 		events: [],
 		buries: [],
 		states: new Map(),
-		issues: { duplicates: [], invalidDeckPaths: [] },
+		issues: { duplicates: [] },
 	};
 }
 
@@ -43,6 +43,7 @@ describe('deck-first study pages', () => {
 
 		const rows = Array.from(parent.querySelectorAll<HTMLButtonElement>('.remember-deck-row'));
 		expect(rows.map((row) => row.querySelector('.remember-deck-name')?.textContent)).toEqual([
+			'All',
 			'Language',
 			'Spanish',
 		]);
@@ -51,8 +52,10 @@ describe('deck-first study pages', () => {
 			'held for a future day by the daily limit',
 		);
 		expect(parent.querySelector('.remember-deck-header-count-suspended')).toBeNull();
-		rows[0].click();
+		rows[1].click();
 		expect(selectDeck).toHaveBeenCalledWith('Language');
+		rows[0].click();
+		expect(selectDeck).toHaveBeenCalledWith('');
 	});
 
 	it('shows suspended counts only when the selected scope contains suspended cards', () => {
@@ -68,7 +71,7 @@ describe('deck-first study pages', () => {
 		);
 		expect(
 			Array.from(parent.querySelectorAll('.remember-count-suspended')).map((item) => item.textContent),
-		).toEqual(['2', '2']);
+		).toEqual(['2', '2', '2']);
 		expect(parent.querySelector('.remember-count-suspended')?.getAttribute('aria-label')).toContain(
 			'excluded from review',
 		);

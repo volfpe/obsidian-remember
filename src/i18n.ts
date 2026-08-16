@@ -5,10 +5,14 @@ export const STRINGS = {
 		viewTitle: 'Remember',
 		openCommand: 'Open',
 		openRibbon: 'Remember: open',
+		newCardCommand: 'New card',
+		newCardRibbon: 'Remember: new card',
 	},
 	settings: {
-		deckPropertyName: 'Deck property name',
-		deckPropertyDescription: 'Frontmatter property that assigns a note to a deck, e.g. "deck: lang/spanish".',
+		rootFolderName: 'Remember folder',
+		rootFolderDescription:
+			'Folder that holds your cards and review logs. ' +
+			'To change it, rename or move the folder first (so the review logs move with it), then update this setting.',
 		burySiblingsName: 'Bury sibling cards',
 		burySiblingsDescription:
 			'Show only one sibling from each card per study day (from reverse-direction or cloze cards).',
@@ -23,8 +27,7 @@ export const STRINGS = {
 		desiredRetentionDescription: 'Fsrs target recall probability. Higher means shorter intervals.',
 	},
 	review: {
-		noCards: (deckProperty: string) =>
-			`No cards found. Give a note a "${deckProperty}" property and write "Question::Answer" lines.`,
+		noCards: 'No cards found. Create one with the "Remember: New card" button or command.',
 		deckHeader: 'Deck',
 		counts: {
 			due: {
@@ -69,6 +72,7 @@ export const STRINGS = {
 		buryToday: 'Bury card until tomorrow',
 	},
 	study: {
+		allDecks: 'All',
 		backToDecks: 'Choose another deck',
 		nothingReady: 'No cards to review',
 		ready: (count: number) => `${count} ${count === 1 ? 'card' : 'cards'} ready`,
@@ -102,7 +106,7 @@ export const STRINGS = {
 		detailTitle: 'Card details',
 		backToList: 'Back to cards',
 		front: 'Front',
-		answer: 'Answer',
+		back: 'Back',
 		history: 'Review history',
 		noHistory: 'This card has not been reviewed yet.',
 		openSource: (path: string) => `Open ${path}`,
@@ -110,7 +114,7 @@ export const STRINGS = {
 		dueIn: (interval: string) => `In ${interval}`,
 		notScheduled: '—',
 		fields: {
-			source: 'Source',
+			source: 'Card file',
 			sibling: 'Card',
 			availability: 'Availability',
 			state: 'State',
@@ -150,11 +154,27 @@ export const STRINGS = {
 			cloze: (number: number) => `Cloze ${number}`,
 		},
 	},
+	addCard: {
+		title: 'New card',
+		deck: 'Deck',
+		type: 'Type',
+		typeBasic: 'Basic',
+		typeCloze: 'Cloze',
+		reverse: 'Reverse',
+		reverseDescription: 'Also ask for the front when shown the back.',
+		front: 'Front',
+		back: 'Back',
+		text: 'Text',
+		fieldPlaceholder: 'Optional',
+		create: 'Create',
+		createContinue: 'Create & continue',
+		createContinueTooltip: 'Available when the fields form a complete card.',
+		created: (name: string) => `Created "${name}"`,
+	},
 	notices: {
 		duplicateCardId: (path: string) =>
-			`Remember: duplicate card id in ${path} — delete one of the copied %%rem%% tokens.`,
-		invalidDeckProperty: (path: string) =>
-			`Remember: ${path} has an invalid deck property; expected a single value, not a list or object.`,
+			`Remember: duplicate card id in ${path}.`,
+		couldNotCreateCard: (error: unknown) => `Remember: could not create the card — ${String(error)}`,
 		couldNotSaveReview: (error: unknown) => `Remember: could not save the review — ${String(error)}`,
 		couldNotSaveBury: (error: unknown) => `Remember: could not bury the card — ${String(error)}`,
 		couldNotSaveUndo: (error: unknown) => `Remember: could not save the undo — ${String(error)}`,

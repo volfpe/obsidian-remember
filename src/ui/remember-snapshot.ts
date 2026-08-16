@@ -1,16 +1,23 @@
-import { TFile, type App } from 'obsidian';
+import type { App, TFile } from 'obsidian';
 import type { Card as FsrsCard, FSRS } from 'ts-fsrs';
 import { readCardEvents } from '../log';
+import {
+	ID_PROPERTY,
+	parseCardNote,
+	readCardId,
+	readCardKind,
+	TYPE_PROPERTY,
+	type ParsedCardNote,
+} from '../core/card-note';
 import type { BuryEvent, ReviewEvent } from '../core/events';
-import { parseCards } from '../core/parser';
+import { newCardId } from '../core/id';
 import { selectCards, type NoteCard } from '../core/queue';
 import { foldEvents } from '../core/scheduler';
 import type { RememberSettings } from '../settings';
-import { stampNote } from '../stamper';
+import { parentPath } from '../vault-folders';
 
 export interface RememberSnapshotIssues {
 	duplicates: NoteCard[];
-	invalidDeckPaths: string[];
 }
 
 export interface RememberSnapshot {
@@ -22,12 +29,17 @@ export interface RememberSnapshot {
 	issues: RememberSnapshotIssues;
 }
 
-export interface CardScan {
-	cards: NoteCard[];
-	invalidDeckPaths: string[];
+
+/** True when the path is inside the folder (never the folder itself). */
+export function isUnderFolder(path: string, folder: string): boolean {
+	return folder !== '' && path.startsWith(folder + '/');
 }
 
-type DeckResult = { kind: 'none' } | { kind: 'invalid' } | { kind: 'deck'; deck: string };
+/** The deck of a card note: its folder path relative to the root folder; '' is the root deck. */
+export function deckOfPath(path: string, rootFolder: string): string {
+	const parent = parentPath(path);
+	return parent === rootFolder ? '' : parent.slice(rootFolder.length + 1);
+}
 
 /** Builds one consistent in-memory source for every non-session Remember page. */
 export class RememberSnapshotRepository {
@@ -38,11 +50,13 @@ export class RememberSnapshotRepository {
 	) {}
 
 	async load(): Promise<RememberSnapshot> {
-		const [initialScan, cardEvents] = await Promise.all([this.scanCards(), readCardEvents(this.app)]);
-		const scan = await this.initializeCardIds(initialScan);
+		const [cards, cardEvents] = await Promise.all([
+			this.scanCards(),
+			readCardEvents(this.app, this.settings.rootFolder),
+		]);
 		const events = cardEvents.filter((event): event is ReviewEvent => event.k === 'r');
 		const buries = cardEvents.filter((event): event is BuryEvent => event.k === 'b');
-		const selection = selectCards(scan.cards);
+		const selection = selectCards(cards);
 		return {
 			loadedAt: new Date(),
 			cards: selection.kept,
@@ -51,71 +65,75 @@ export class RememberSnapshotRepository {
 			states: foldEvents(this.fsrs, events),
 			issues: {
 				duplicates: selection.dropped,
-				invalidDeckPaths: scan.invalidDeckPaths,
 			},
 		};
 	}
 
-	/** Every card in every note carrying the deck property, including duplicate ids. */
-	async scanCards(): Promise<CardScan> {
+	/**
+	 * Every complete card note in the root folder. Notes that are not recognizable as
+	 * cards are left untouched; incomplete cards (no siblings yet) are adopted but
+	 * produce nothing to review until the user finishes them.
+	 */
+	private async scanCards(): Promise<NoteCard[]> {
+		const root = this.settings.rootFolder;
 		const cards: NoteCard[] = [];
-		const invalidDeckPaths: string[] = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
-			const result = this.deckOf(file);
-			if (result.kind === 'invalid') {
-				invalidDeckPaths.push(file.path);
-				continue;
-			}
-			if (result.kind === 'none') continue;
+			if (!isUnderFolder(file.path, root)) continue;
+			let parsed: ParsedCardNote;
 			try {
-				const text = await this.app.vault.cachedRead(file);
-				for (const card of parseCards(text)) {
-					cards.push({ ...card, path: file.path, deck: result.deck });
-				}
+				parsed = await this.parseFile(file);
 			} catch (error) {
 				console.warn(`Remember: cannot read ${file.path}`, error);
-			}
-		}
-		return { cards, invalidDeckPaths };
-	}
-
-	/** Stamps every unstamped card found in a deck note and returns exactly what was written. */
-	private async initializeCardIds(scan: CardScan): Promise<CardScan> {
-		const byPath = new Map<string, NoteCard[]>();
-		for (const card of scan.cards) {
-			const fileCards = byPath.get(card.path);
-			if (fileCards) fileCards.push(card);
-			else byPath.set(card.path, [card]);
-		}
-		for (const [path, fileCards] of byPath) {
-			if (fileCards.every((card) => card.id !== null)) continue;
-			const file = this.app.vault.getAbstractFileByPath(path);
-			if (!(file instanceof TFile)) {
-				byPath.delete(path);
 				continue;
 			}
-			try {
-				const stamped = await stampNote(this.app, file);
-				byPath.set(
-					path,
-					parseCards(stamped).map((card) => ({ ...card, path, deck: fileCards[0].deck })),
-				);
-			} catch (error) {
-				console.warn(`Remember: could not stamp ${path}; its cards remain unstamped`, error);
-			}
+			if (parsed.kind === null) continue;
+			parsed = await this.adopt(file, parsed);
+			if (parsed.kind === null || parsed.siblings.length === 0) continue;
+			cards.push({
+				id: parsed.id,
+				kind: parsed.kind,
+				suspended: parsed.suspended,
+				reverse: parsed.reverse,
+				siblings: parsed.siblings,
+				line: parsed.line,
+				path: file.path,
+				deck: deckOfPath(file.path, root),
+			});
 		}
-		return { cards: [...byPath.values()].flat(), invalidDeckPaths: scan.invalidDeckPaths };
+		return cards;
 	}
 
-	private deckOf(file: TFile): DeckResult {
-		const raw: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.[
-			this.settings.deckProperty
-		];
-		if (raw === null || raw === undefined) return { kind: 'none' };
-		if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') {
-			return { kind: 'invalid' };
+	private async parseFile(file: TFile, frontmatter?: Record<string, unknown>): Promise<ParsedCardNote> {
+		const text = await this.app.vault.cachedRead(file);
+		return parseCardNote(text, frontmatter ?? this.app.metadataCache.getFileCache(file)?.frontmatter);
+	}
+
+	/**
+	 * Writes missing identity frontmatter (id, type) into a recognizable card note,
+	 * then re-parses so line numbers match the written note. The metadata cache can
+	 * lag behind the file, so the write only fills values the file itself is missing —
+	 * a real id is never overwritten. Adoption failures are logged and leave the card
+	 * unstamped; the queue keeps working with provisional keys.
+	 */
+	private async adopt(file: TFile, parsed: ParsedCardNote): Promise<ParsedCardNote> {
+		if (parsed.id !== null && parsed.declaredKind !== null) return parsed;
+		let id = parsed.id ?? newCardId();
+		let kind = parsed.kind;
+		if (kind === null) return parsed;
+		const frontmatter = { ...this.app.metadataCache.getFileCache(file)?.frontmatter };
+		try {
+			await this.app.fileManager.processFrontMatter(file, (stored: Record<string, unknown>) => {
+				const storedId = readCardId(stored);
+				if (storedId === null) stored[ID_PROPERTY] = id;
+				else id = storedId;
+				const storedKind = readCardKind(stored);
+				if (storedKind === null) stored[TYPE_PROPERTY] = kind;
+				else kind = storedKind;
+			});
+		} catch (error) {
+			console.warn(`Remember: could not stamp ${file.path}; its card stays unstamped`, error);
+			return parsed;
 		}
-		const deck = String(raw).trim();
-		return deck === '' ? { kind: 'none' } : { kind: 'deck', deck };
+		return this.parseFile(file, { ...frontmatter, [ID_PROPERTY]: id, [TYPE_PROPERTY]: kind });
 	}
 }

@@ -10,7 +10,7 @@ import {
 	type RememberSnapshot,
 } from './remember-snapshot';
 import { ReviewSession } from './review-session';
-import { renderDeckChooser, renderDeckStudyPage } from './study-page';
+import { displayDeck, renderDeckChooser, renderDeckStudyPage } from './study-page';
 
 type RememberSection = 'study' | 'cards' | 'statistics';
 const IMPORT_ENABLED = false;
@@ -35,6 +35,7 @@ export class ReviewView extends ItemView {
 		leaf: WorkspaceLeaf,
 		private settings: RememberSettings,
 		private openSettings: () => void = () => undefined,
+		private legacyMigration: LegacyMigrationPort | null = null,
 	) {
 		super(leaf);
 		this.navigation = false;
@@ -103,6 +104,19 @@ export class ReviewView extends ItemView {
 		this.renderNavigation();
 		this.renderCurrentSection();
 		await this.refreshData();
+		void this.offerLegacyMigration();
+	}
+
+	/** Legacy inline-card migration; the hook disappears with src/migration/. */
+	private async offerLegacyMigration(): Promise<void> {
+		const migration = this.legacyMigration;
+		if (!migration) return;
+		try {
+			if (!(await migration.hasLegacyCards())) return;
+			migration.offer(() => void this.refreshData(true));
+		} catch (error) {
+			console.warn('Remember: legacy card check failed', error);
+		}
 	}
 
 	private renderImportButton(header: HTMLElement): void {
@@ -162,7 +176,7 @@ export class ReviewView extends ItemView {
 		const hasSelectedDeck = this.selectedDeck !== null;
 		this.backToDecksButtonEl?.toggleClass('is-hidden', !hasSelectedDeck);
 		this.contentTitleEl?.toggleClass('is-hidden', !hasSelectedDeck);
-		this.contentTitleEl?.setText(this.selectedDeck ?? '');
+		this.contentTitleEl?.setText(this.selectedDeck === null ? '' : displayDeck(this.selectedDeck));
 	}
 
 	private selectDeck(deck: string): void {
@@ -306,8 +320,12 @@ export class ReviewView extends ItemView {
 		for (const duplicate of snapshot.issues.duplicates) {
 			new Notice(STRINGS.notices.duplicateCardId(duplicate.path));
 		}
-		for (const path of snapshot.issues.invalidDeckPaths) {
-			new Notice(STRINGS.notices.invalidDeckProperty(path));
-		}
 	}
+}
+
+/** Implemented by src/migration/ for the one-time legacy inline-card migration. */
+export interface LegacyMigrationPort {
+	hasLegacyCards(): Promise<boolean>;
+	/** Shows the migration prompt; calls onMigrated after a successful migration. */
+	offer(onMigrated: () => void): void;
 }

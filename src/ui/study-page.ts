@@ -20,6 +20,11 @@ interface DeckNode {
 	children: DeckNode[];
 }
 
+/** The root deck '' is presented as "All"; every other deck shows its folder path. */
+export function displayDeck(deck: string): string {
+	return deck === '' ? STRINGS.study.allDecks : deck;
+}
+
 export function renderDeckChooser(
 	parent: HTMLElement,
 	snapshot: RememberSnapshot,
@@ -32,7 +37,7 @@ export function renderDeckChooser(
 	if (snapshot.cards.length === 0) {
 		page.createEl('p', {
 			cls: 'remember-empty',
-			text: STRINGS.review.noCards(settings.deckProperty),
+			text: STRINGS.review.noCards,
 		});
 		return;
 	}
@@ -43,7 +48,7 @@ export function renderDeckChooser(
 		statsByDeck.set(node.path, deckCounts(snapshot, settings, node.path, now));
 		for (const child of node.children) collectStats(child);
 	};
-	for (const node of tree) collectStats(node);
+	collectStats(tree);
 	const showWaiting = [...statsByDeck.values()].some((counts) => counts.waiting > 0);
 	const showBuried = [...statsByDeck.values()].some((counts) => counts.buried > 0);
 	const showSuspended = [...statsByDeck.values()].some((counts) => counts.suspended > 0);
@@ -86,7 +91,7 @@ export function renderDeckChooser(
 		row.addEventListener('click', () => onSelectDeck(node.path));
 		for (const child of node.children) renderNode(child, depth + 1);
 	};
-	for (const node of tree) renderNode(node, 0);
+	renderNode(tree, 0);
 }
 
 export function renderDeckStudyPage(
@@ -214,12 +219,14 @@ function deckCountColumns(showWaiting: boolean, showBuried: boolean, showSuspend
 	].join(' ');
 }
 
-function buildDeckTree(cards: NoteCard[]): DeckNode[] {
-	const roots: DeckNode[] = [];
+/** All decks hang under the root deck '', which exists even when it holds no cards directly. */
+function buildDeckTree(cards: NoteCard[]): DeckNode {
+	const root: DeckNode = { path: '', name: STRINGS.study.allDecks, children: [] };
 	const byPath = new Map<string, DeckNode>();
 	for (const deck of [...new Set(cards.map((card) => card.deck))].sort()) {
+		if (deck === '') continue;
 		let path = '';
-		let siblings = roots;
+		let siblings = root.children;
 		for (const part of deck.split('/')) {
 			path = path === '' ? part : `${path}/${part}`;
 			let node = byPath.get(path);
@@ -231,5 +238,5 @@ function buildDeckTree(cards: NoteCard[]): DeckNode[] {
 			siblings = node.children;
 		}
 	}
-	return roots;
+	return root;
 }

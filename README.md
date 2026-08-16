@@ -6,61 +6,54 @@ Built for reliable use across synced devices.
 
 ## Usage
 
-Add a `deck` property to every note that contains cards. Open the Command palette (`Cmd/Ctrl+P`), run **Add file property**, name it `deck`, and enter a deck name:
+Every card is one Markdown note inside the **Remember** folder (configurable in settings). Folders inside it are decks; nested folders are subdecks.
+
+Create a card with the **Remember: new card** command or  button in the left toolbar. New decks are made by creating folders.
+
+To review, run the **Remember: Open** command or click its toolbar icon.
+
+### Basic cards
 
 ```markdown
 ---
-deck: lang/spanish
+remember-id: k2mf9x1a0q7b3c8d
+remember-type: basic
+remember-reverse: false
 ---
+
+# Front
+
+hola
+
+# Back
+
+hello
 ```
 
-Then add cards anywhere in the note using one of the formats below. To review them, click the **Remember: open** icon in the left toolbar or run the **Remember: Open** command.
-
-### Single-line cards
-
-A single-line card has its question and answer on one line, separated by `::`:
-
-```markdown
-hola::hello
-```
-
-Use `:::` to also create a card in the reverse direction:
-
-```markdown
-perro:::dog
-```
-
-### Multi-line cards
-
-A multi-line card has `?` on its own line between the question and answer:
-
-```markdown
-What article does "mano" take?
-?
-La mano — feminine despite the -o ending.
-```
-
-Use `??` to also create a card in the reverse direction.
+Set `remember-reverse: true` to also create a card in the reverse direction.
 
 ### Cloze cards
 
-A cloze card hides marked text in its surrounding context:
+A cloze card hides marked text in its surrounding context. The whole note body is the card:
 
 ```markdown
+---
+remember-id: k2mf9x1a0q7b3c8e
+remember-type: cloze
+---
+
 The capital of {{c1::France}} is {{c2::Paris}}.
 ```
 
-Each `cN` is a required, stable card number. Clozes are single-line.
+Each `cN` is a required, stable card number.
 
 ### Suspending cards
 
-Prefix a card with `{suspend}` to exclude it from reviews without deleting its history:
+Add `remember-suspend: true` to the frontmatter to exclude a card from reviews without deleting its history.
 
-```markdown
-{suspend} hola::hello
-```
+### Adding existing notes
 
-Remove `{suspend}` to resume the card.
+Create any note into the Remember folder and give it `# Front`/`# Back` sections or a cloze marker. Remember adds the missing frontmatter when it opens.
 
 ## Multi-device sync
 
@@ -68,7 +61,4 @@ When using Obsidian Sync, enable **Settings → Sync → Selective sync → Sync
 
 ## Data storage
 
-Remember stores all data locally in your vault.
-
-- When Remember opens, it adds hidden `%%rem:<id>%%` comments to unstamped cards in deck notes.
-- Review history is stored in the vault root in `reviews-<device-id>.rememberlog` files. Remember uses these files to calculate each card’s schedule, so do not delete them.
+Remember stores all data locally in your vault: cards are plain Markdown notes, and review history lives in `reviews-<device-id>.rememberlog` files in the Remember folder. The schedule is calculated from these files, so do not delete them.

@@ -8,7 +8,7 @@ Users should be able to understand and change a card without another data store 
 
 ## Decision
 
-Store persistent card configuration in the Markdown card definition.
+Store persistent card configuration (`remember-type`, `remember-reverse`, `remember-suspend`) in the card note's frontmatter.
 
 Store temporary study actions in review logs.
 

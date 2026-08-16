@@ -27,11 +27,11 @@ function card(id: string | null, overrides: Partial<NoteCard> & { reversed?: boo
 		id,
 		suspended,
 		kind: 'basic',
+		reverse: reversed,
 		siblings: [
 			{ sub: 0, front, back },
 			...(reversed ? [{ sub: 1, front: back, back: front }] : []),
 		],
-		multiline: false,
 		line: 0,
 		path: 'note.md',
 		deck: 'deck',

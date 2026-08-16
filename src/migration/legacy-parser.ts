@@ -1,6 +1,8 @@
+// LEGACY inline-card parsing (:: / ? / {{cN::…}} lines with %%rem%% tokens), kept only
+// for the one-time migration to card notes. Delete with the rest of src/migration/.
 // Pure note-text -> Card[] parsing. No Obsidian imports.
 
-import { maskMarkdownCode, type MarkdownLine } from './markdown-code';
+import { maskMarkdownCode, type MarkdownLine } from '../core/markdown-code';
 
 export interface ParsedSibling {
 	/** Stable sibling index persisted in review events. */
@@ -259,4 +261,26 @@ function stripTokens(raw: string, searchable: string): string {
 
 function clean(line: string | undefined): string {
 	return (line ?? '').replace(/\r$/, '');
+}
+
+/** The raw cloze line without id tokens and without a {suspend} prefix, for reuse as a card-note body. */
+export function clozeSource(text: string, line: number): string {
+	const lines = maskMarkdownCode(text.split('\n').map(clean));
+	const target = lines[line];
+	if (!target) return '';
+	const status = withoutSuspendPrefix(target);
+	const source = withoutTokens(status.line.raw, status.line.searchable);
+	return source.raw.trim();
+}
+
+/** The note text with every %%rem%% token removed; token-only lines disappear entirely. */
+export function stripLegacyTokens(text: string): string {
+	const lines = maskMarkdownCode(text.split('\n').map(clean));
+	const kept: string[] = [];
+	for (const { raw, searchable } of lines) {
+		if (raw.trim() === searchable.trim() && TOKEN_ONLY.test(raw.trim())) continue;
+		const stripped = stripTokens(raw, searchable);
+		kept.push(stripped === raw ? raw : stripped.replace(/[ \t]+$/, ''));
+	}
+	return kept.join('\n');
 }

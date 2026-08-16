@@ -47,7 +47,8 @@ function makeHarness(): {
 	finished: ReturnType<typeof vi.fn>;
 	session: ReviewSessionHarness;
 } {
-	const mockApp = App.createConfigured__({ files: { 'note.md': 'q::a' } });
+	const noteContent = ['---', 'remember-id: first', 'remember-type: basic', '---', '', '# Front', '', 'q', '', '# Back', '', 'a', ''].join('\n');
+	const mockApp = App.createConfigured__({ files: { 'note.md': noteContent } });
 	mockApp.saveLocalStorage('remember-device-id', 'device0000001');
 	const app = mockApp.asOriginalType__();
 	const settings = { ...DEFAULT_SETTINGS };
@@ -134,7 +135,7 @@ describe('session progress', () => {
 
 		expect(session.current?.cardId).toBe('second');
 		expect(session.sessionCompleted).toBe(1);
-		const lines = (await app.vault.adapter.read('reviews-device0000001.rememberlog'))
+		const lines = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
 			.trim()
 			.split('\n')
 			.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -146,7 +147,7 @@ describe('session progress', () => {
 
 		expect(session.current?.cardId).toBe('first');
 		expect(session.sessionCompleted).toBe(0);
-		const finalLines = (await app.vault.adapter.read('reviews-device0000001.rememberlog'))
+		const finalLines = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
 			.trim()
 			.split('\n')
 			.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -176,7 +177,10 @@ describe('session progress', () => {
 		const { app, session } = makeHarness();
 		session.sessionTotal = 2;
 		const file = app.vault.getFileByPath('note.md')!;
-		await app.vault.modify(file, '{suspend} q::a %%rem:first%%');
+		await app.vault.modify(
+			file,
+			['---', 'remember-id: first', 'remember-type: basic', 'remember-suspend: true', '---', '', '# Front', '', 'q', '', '# Back', '', 'a', ''].join('\n'),
+		);
 
 		await session.refreshCurrentDefinition();
 

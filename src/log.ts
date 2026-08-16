@@ -1,9 +1,13 @@
 // Device id + the per-device append-only event logs (reviews-<deviceId>.rememberlog).
 // These logs are the only scheduling store: no snapshot, no cache file, no database.
+// Events are written and read only inside the Remember root folder; logs anywhere
+// else are ignored. The root folder setting warns users to move the folder (and the
+// logs with it) instead of leaving history behind.
 
-import type { App } from 'obsidian';
+import type { App, TFile } from 'obsidian';
 import type { CardEvent, LogEvent, ReviewEvent } from './core/events';
 import { randomId } from './core/id';
+import { ensureFolder, parentPath } from './vault-folders';
 
 const DEVICE_ID_KEY = 'remember-device-id';
 const LOG_EXTENSION = '.rememberlog';
@@ -21,40 +25,51 @@ function ownLogName(app: App): string {
 	return `reviews-${getDeviceId(app)}${LOG_EXTENSION}`;
 }
 
-function ownLogPath(app: App): string {
-	return ownLogName(app);
+function ownLogPath(app: App, rootFolder: string): string {
+	return rootFolder === '' ? ownLogName(app) : `${rootFolder}/${ownLogName(app)}`;
 }
 
 /** True append via the adapter — no read-modify-write. */
-export async function appendEvent(app: App, event: CardEvent): Promise<void> {
-	await appendLogEvent(app, event);
+export async function appendEvent(app: App, rootFolder: string, event: CardEvent): Promise<void> {
+	await appendLogEvent(app, rootFolder, event);
 }
 
 /** Appends a tombstone for a reversible event. The original event remains in the log. */
-export async function appendUndoEvent(app: App, eventId: string): Promise<void> {
-	await appendLogEvent(app, { v: 1, k: 'u', t: new Date().toISOString(), u: eventId });
+export async function appendUndoEvent(app: App, rootFolder: string, eventId: string): Promise<void> {
+	await appendLogEvent(app, rootFolder, { v: 1, k: 'u', t: new Date().toISOString(), u: eventId });
 }
 
-async function appendLogEvent(app: App, event: LogEvent): Promise<void> {
-	await app.vault.adapter.append(ownLogPath(app), JSON.stringify(event) + '\n');
+async function appendLogEvent(app: App, rootFolder: string, event: LogEvent): Promise<void> {
+	await ensureFolder(app, rootFolder);
+	await app.vault.adapter.append(ownLogPath(app, rootFolder), JSON.stringify(event) + '\n');
+}
+
+/** Every review log inside the root folder. */
+export function listLogFiles(app: App, rootFolder: string): TFile[] {
+	return app.vault
+		.getFiles()
+		.filter((file) => isLogFile(file.name) && parentPath(file.path) === rootFolder);
 }
 
 /** Active reviews across every device's log. Undo tombstones are applied independent of file order. */
-export async function readEvents(app: App): Promise<ReviewEvent[]> {
-	return (await readCardEvents(app)).filter((event): event is ReviewEvent => event.k === 'r');
+export async function readEvents(app: App, rootFolder: string): Promise<ReviewEvent[]> {
+	return (await readCardEvents(app, rootFolder)).filter((event): event is ReviewEvent => event.k === 'r');
 }
 
 /** Active reviews and temporary card actions across every device's log. */
-export async function readCardEvents(app: App): Promise<CardEvent[]> {
-	const adapter = app.vault.adapter;
+export async function readCardEvents(app: App, rootFolder: string): Promise<CardEvent[]> {
 	const seenEvents = new Set<string>();
 	const events: CardEvent[] = [];
 	const undone = new Set<string>();
-	for (const path of (await adapter.list('')).files) {
-		if (!isLogFile(baseName(path))) continue;
+	// The own log is read by its known path: a log created moments ago may not be
+	// in the vault's file index yet.
+	const paths = new Set(listLogFiles(app, rootFolder).map((file) => file.path));
+	const own = ownLogPath(app, rootFolder);
+	if (!paths.has(own) && (await app.vault.adapter.exists(own))) paths.add(own);
+	for (const path of paths) {
 		let content: string;
 		try {
-			content = await adapter.read(path);
+			content = await app.vault.adapter.read(path);
 		} catch (error) {
 			console.warn(`Remember: cannot read ${path}; skipping it`, error);
 			continue;
@@ -80,22 +95,23 @@ export async function readCardEvents(app: App): Promise<CardEvent[]> {
 
 /**
  * Merges sync-conflict copies of the own device's log back into it and deletes them.
- * Safe: this device is the only writer of both. Copies of other devices' files are left alone.
+ * Safe: this device is the only writer of both. Copies of other devices' files are
+ * left alone, and only the root folder is touched.
  */
-export async function cleanOwnConflictCopies(app: App): Promise<void> {
+export async function cleanOwnConflictCopies(app: App, rootFolder: string): Promise<void> {
 	const adapter = app.vault.adapter;
 	const own = ownLogName(app);
 	const prefix = own.slice(0, -LOG_EXTENSION.length);
-	const copies = (await adapter.list('')).files.filter((path) => {
-		const name = baseName(path);
-		return isLogFile(name) && name !== own && name.startsWith(prefix);
-	});
+	const copies = listLogFiles(app, rootFolder)
+		.filter((file) => file.name !== own && file.name.startsWith(prefix))
+		.map((file) => file.path);
 	if (copies.length === 0) return;
 
-	const ownPath = ownLogPath(app);
+	const ownPath = ownLogPath(app, rootFolder);
 	const ownLines = new Set(
 		(await adapter.exists(ownPath)) ? (await adapter.read(ownPath)).split('\n').filter((line) => line.trim() !== '') : [],
 	);
+	await ensureFolder(app, rootFolder);
 	for (const copy of copies) {
 		const missing = (await adapter.read(copy)).split('\n').filter((line) => line.trim() !== '' && !ownLines.has(line));
 		if (missing.length > 0) {
@@ -104,10 +120,6 @@ export async function cleanOwnConflictCopies(app: App): Promise<void> {
 		}
 		await adapter.remove(copy);
 	}
-}
-
-function baseName(path: string): string {
-	return path.slice(path.lastIndexOf('/') + 1);
 }
 
 function isLogFile(name: string): boolean {

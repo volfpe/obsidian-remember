@@ -41,6 +41,29 @@ button.remember-back-to-decks.is-hidden {
 	display: none;
 }
 
+.remember-add-card-modal .setting-item {
+	align-items: center;
+}
+
+.remember-add-card-modal .setting-item.is-hidden {
+	display: none;
+}
+
+.remember-add-card-modal .remember-add-card-field .setting-item-control {
+	flex: 1;
+}
+
+.remember-add-card-modal .remember-add-card-field textarea {
+	width: 100%;
+	resize: vertical;
+}
+
+.remember-add-card-status {
+	min-height: 1.5em;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
 button.remember-refresh {
 	flex: 0 0 auto;
 	margin-left: auto;

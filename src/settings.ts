@@ -3,7 +3,7 @@ import { STRINGS } from './i18n';
 import type RememberPlugin from './main';
 
 export interface RememberSettings {
-	deckProperty: string;
+	rootFolder: string;
 	desiredRetention: number;
 	burySiblings: boolean;
 	limitNewCardsPerDay: boolean;
@@ -11,18 +11,30 @@ export interface RememberSettings {
 }
 
 export const DEFAULT_SETTINGS: RememberSettings = {
-	deckProperty: 'deck',
+	rootFolder: 'Remember',
 	desiredRetention: 0.9,
 	burySiblings: true,
 	limitNewCardsPerDay: false,
 	newCardsPerDay: 20,
 };
 
+/** A vault-relative folder path without empty or dot segments. */
+export function normalizeRootFolder(value: string): string {
+	const segments = value
+		.split('/')
+		.map((segment) => segment.trim())
+		.filter((segment) => segment !== '' && segment !== '.' && segment !== '..');
+	return segments.join('/');
+}
+
 export function parseSettings(value: unknown): RememberSettings {
 	if (typeof value !== 'object' || value === null) return { ...DEFAULT_SETTINGS };
 	const stored = value as Record<string, unknown>;
 	return {
-		deckProperty: typeof stored.deckProperty === 'string' ? stored.deckProperty : DEFAULT_SETTINGS.deckProperty,
+		rootFolder:
+			typeof stored.rootFolder === 'string' && normalizeRootFolder(stored.rootFolder) !== ''
+				? normalizeRootFolder(stored.rootFolder)
+				: DEFAULT_SETTINGS.rootFolder,
 		burySiblings:
 			typeof stored.burySiblings === 'boolean' ? stored.burySiblings : DEFAULT_SETTINGS.burySiblings,
 		limitNewCardsPerDay:
@@ -61,12 +73,12 @@ export class RememberSettingTab extends PluginSettingTab {
 	getSettingDefinitions(): SettingDefinitionItem<keyof RememberSettings>[] {
 		return [
 			{
-				name: STRINGS.settings.deckPropertyName,
-				desc: STRINGS.settings.deckPropertyDescription,
+				name: STRINGS.settings.rootFolderName,
+				desc: STRINGS.settings.rootFolderDescription,
 				control: {
 					type: 'text',
-					key: 'deckProperty',
-					defaultValue: DEFAULT_SETTINGS.deckProperty,
+					key: 'rootFolder',
+					defaultValue: DEFAULT_SETTINGS.rootFolder,
 				},
 			},
 			{
@@ -124,8 +136,8 @@ export class RememberSettingTab extends PluginSettingTab {
 	}
 
 	override async setControlValue(key: keyof RememberSettings, value: unknown): Promise<void> {
-		if (key === 'deckProperty' && typeof value === 'string') {
-			this.plugin.settings.deckProperty = value.trim() || DEFAULT_SETTINGS.deckProperty;
+		if (key === 'rootFolder' && typeof value === 'string') {
+			this.plugin.settings.rootFolder = normalizeRootFolder(value) || DEFAULT_SETTINGS.rootFolder;
 		} else if (key === 'burySiblings' && typeof value === 'boolean') {
 			this.plugin.settings.burySiblings = value;
 		} else if (key === 'limitNewCardsPerDay' && typeof value === 'boolean') {

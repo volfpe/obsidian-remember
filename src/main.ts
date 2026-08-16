@@ -1,8 +1,11 @@
 import { Plugin, type App } from 'obsidian';
 import { STRINGS } from './i18n';
 import { cleanOwnConflictCopies } from './log';
+// Legacy inline-card support; delete these two imports with src/migration/.
+import { hideTokens } from './migration/hide-tokens';
+import { LegacyMigration } from './migration/legacy-migration';
 import { parseSettings, RememberSettingTab, type RememberSettings } from './settings';
-import { hideTokens } from './ui/hide-tokens';
+import { AddCardModal } from './ui/add-card-modal';
 import { REMEMBER_VIEW_DEFINITION } from './ui/remember-view-definition';
 import { ReviewView } from './ui/review-view';
 import { TransientSingletonViewHost } from './ui/transient-singleton-view-host';
@@ -13,24 +16,35 @@ export default class RememberPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+		const legacyMigration = new LegacyMigration(
+			this.app,
+			() => this.settings.rootFolder,
+			() => this.loadData(),
+		);
 		this.rememberViewHost = new TransientSingletonViewHost(
 			this.app.workspace,
 			REMEMBER_VIEW_DEFINITION,
 		);
 		this.rememberViewHost.install(
 			this,
-			(leaf) => new ReviewView(leaf, this.settings, () => this.openSettings()),
+			(leaf) => new ReviewView(leaf, this.settings, () => this.openSettings(), legacyMigration),
 		);
 		this.addRibbonIcon(REMEMBER_VIEW_DEFINITION.icon, STRINGS.plugin.openRibbon, () => void this.openReview());
+		this.addRibbonIcon('copy-plus', STRINGS.plugin.newCardRibbon, () => this.openAddCard());
 		this.addCommand({
 			id: 'open',
 			name: STRINGS.plugin.openCommand,
 			callback: () => void this.openReview(),
 		});
+		this.addCommand({
+			id: 'new-card',
+			name: STRINGS.plugin.newCardCommand,
+			callback: () => this.openAddCard(),
+		});
 		this.addSettingTab(new RememberSettingTab(this.app, this));
 		this.registerEditorExtension(hideTokens);
 		this.app.workspace.onLayoutReady(() => {
-			cleanOwnConflictCopies(this.app).catch((error) =>
+			cleanOwnConflictCopies(this.app, this.settings.rootFolder).catch((error) =>
 				console.error('Remember: sync-conflict cleanup failed', error),
 			);
 		});
@@ -44,12 +58,20 @@ export default class RememberPlugin extends Plugin {
 		}
 	}
 
+	openAddCard(): void {
+		new AddCardModal(this.app, this.settings).open();
+	}
+
 	async loadSettings(): Promise<void> {
 		this.settings = parseSettings(await this.loadData());
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		// Unknown stored keys survive (the legacy deckProperty is read by src/migration/;
+		// save plain settings again once that folder is deleted).
+		const stored: unknown = await this.loadData();
+		const base = typeof stored === 'object' && stored !== null ? stored : {};
+		await this.saveData({ ...base, ...this.settings });
 	}
 
 	private openSettings(): void {

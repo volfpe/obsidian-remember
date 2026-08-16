@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCards, type ParsedCard } from './parser';
+import { parseCards, type ParsedCard } from './legacy-parser';
 
 function firstSibling(card: ParsedCard) {
 	return card.siblings[0];

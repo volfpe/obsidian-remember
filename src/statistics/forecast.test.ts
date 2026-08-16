@@ -10,7 +10,7 @@ function card(id: string, siblings = 1): NoteCard {
 		id,
 		suspended: false,
 		kind: 'basic',
-		multiline: false,
+		reverse: false,
 		line: 0,
 		path: `${id}.md`,
 		deck: 'Deck',

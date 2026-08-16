@@ -9,9 +9,9 @@ import {
 } from 'obsidian';
 import { Rating, type FSRS, type Grade } from 'ts-fsrs';
 import { appendEvent, appendUndoEvent } from '../log';
+import { parseCardNote } from '../core/card-note';
 import type { BuryEvent, CardEvent, ReviewEvent } from '../core/events';
 import { randomId } from '../core/id';
-import { parseCards } from '../core/parser';
 import {
 	buildQueue,
 	countDeckStats,
@@ -27,6 +27,7 @@ import { STRINGS } from '../i18n';
 import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
 import { openCardDefinition } from './open-card-definition';
 import type { RememberSnapshot } from './remember-snapshot';
+import { displayDeck } from './study-page';
 
 interface UndoEntry {
 	/** The item as presented before the reversible action. */
@@ -128,7 +129,10 @@ export class ReviewSession extends Component {
 
 	private renderSessionHeader(parent: HTMLElement): void {
 		const header = parent.createDiv({ cls: 'remember-session-header' });
-		header.createSpan({ cls: 'remember-session-title-name', text: this.sessionDeck ?? '' });
+		header.createSpan({
+			cls: 'remember-session-title-name',
+			text: this.sessionDeck === null ? '' : displayDeck(this.sessionDeck),
+		});
 		this.progressEl = header.createSpan({ cls: 'remember-progress' });
 		this.progressCurrentEl = this.progressEl.createSpan({ cls: 'remember-progress-current' });
 		this.progressEl.createSpan({
@@ -260,7 +264,7 @@ export class ReviewSession extends Component {
 				dr: this.fsrs.parameters.request_retention,
 			};
 			try {
-				await appendEvent(this.app, event);
+				await appendEvent(this.app, this.settings.rootFolder, event);
 			} catch (error) {
 				new Notice(STRINGS.notices.couldNotSaveReview(error));
 				return;
@@ -299,7 +303,7 @@ export class ReviewSession extends Component {
 				x: startOfNextLocalDay(when).toISOString(),
 			};
 			try {
-				await appendEvent(this.app, event);
+				await appendEvent(this.app, this.settings.rootFolder, event);
 			} catch (error) {
 				new Notice(STRINGS.notices.couldNotSaveBury(error));
 				return;
@@ -320,16 +324,17 @@ export class ReviewSession extends Component {
 		if (!item || this.phase === 'idle' || this.busy) return;
 		const file = this.app.vault.getAbstractFileByPath(item.path);
 		if (!(file instanceof TFile)) return;
-		let definition: ReturnType<typeof parseCards>[number] | undefined;
+		let definition: ReturnType<typeof parseCardNote>;
 		try {
-			definition = parseCards(await this.app.vault.cachedRead(file)).find(
-				(card) => card.id === item.cardId,
+			definition = parseCardNote(
+				await this.app.vault.cachedRead(file),
+				this.app.metadataCache.getFileCache(file)?.frontmatter,
 			);
 		} catch (error) {
 			console.warn(`Remember: could not refresh ${item.path} after editing`, error);
 			return;
 		}
-		if (!definition) return;
+		if (definition.id !== item.cardId) return;
 		if (definition.suspended) {
 			const queuedSiblings = this.queue.filter((queued) => queued.cardId === item.cardId).length;
 			this.queue = this.queue.filter((queued) => queued.cardId !== item.cardId);
@@ -355,7 +360,7 @@ export class ReviewSession extends Component {
 		this.busy = true;
 		try {
 			try {
-				await appendUndoEvent(this.app, entry.event.i);
+				await appendUndoEvent(this.app, this.settings.rootFolder, entry.event.i);
 			} catch (error) {
 				console.warn('Remember: undo failed', error);
 				new Notice(STRINGS.notices.couldNotSaveUndo(error));

@@ -2,22 +2,22 @@
 
 ## Context
 
-Each card needs to have some identifier.
+Each card needs an identifier that survives edits, renames, and moves.
 
 ## Decision
 
-Store a card ID in an Obsidian comment in the note. Put the comment at the end of a single-line card or on the line above a multi-line card.
+Store the card ID in the `remember-id` frontmatter property of the card note.
 
 Card IDs contain 16 base36 characters. The first 9 contain the Unix millisecond stamp time. The last 7 contain 32 random bits.
 
 Both directions of a reversed card use the same ID and different sibling numbers.
 
-Remember reports the duplicate and uses only one copy until one ID is removed.
+Remember reports a duplicated ID and uses only one copy until one ID is changed.
 
 ## Consequences
 
-Moving or editing a card keeps its history.
+Renaming, editing, or moving a card note keeps its history.
 
 Cards are sortable by stamp time.
 
-Deleting the comment disconnects the old history.
+Changing the `remember-id` property disconnects the old history.

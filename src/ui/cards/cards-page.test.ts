@@ -12,7 +12,7 @@ function snapshot(): RememberSnapshot {
 			id: 'first-card',
 			suspended: false,
 			kind: 'basic',
-			multiline: false,
+			reverse: false,
 			line: 4,
 			path: 'language/dog.md',
 			deck: 'Language',
@@ -28,7 +28,7 @@ function snapshot(): RememberSnapshot {
 		events: [],
 		buries: [],
 		states: new Map(),
-		issues: { duplicates: [], invalidDeckPaths: [] },
+		issues: { duplicates: [] },
 	};
 }
 

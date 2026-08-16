@@ -1,10 +1,11 @@
-// CodeMirror decoration hiding %%rem:<id>%% tokens in Live Preview, revealed on the cursor line.
-// Reading view hides %%...%% natively.
+// LEGACY: CodeMirror decoration hiding %%rem:<id>%% tokens in Live Preview, revealed on the
+// cursor line. Reading view hides %%...%% natively. Tokens exist only in unmigrated notes;
+// delete with the rest of src/migration/.
 
 import { RangeSetBuilder } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, ViewUpdate, type DecorationSet } from '@codemirror/view';
 import { editorLivePreviewField } from 'obsidian';
-import { TOKEN_PATTERN } from '../core/parser';
+import { TOKEN_PATTERN } from './legacy-parser';
 
 const hidden = Decoration.replace({});
 
