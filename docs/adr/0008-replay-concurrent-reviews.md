@@ -4,12 +4,16 @@
 
 Two offline devices may review the same card before their logs sync. Both reviews then appear in the vault.
 
+FSRS supports reviews that happen close together. Each real review can affect the card's memory state, even when it happens on the same day.
+
 ## Decision
 
-Keep both reviews and replay them in timestamp order, like all other reviews.
+Keep both reviews. Replay them in timestamp order, like all other reviews.
 
-Do not try to detect or merge concurrent reviews.
+Do not discard one review or merge the two into one.
 
 ## Consequences
 
-The second review may increase stability more than a single review would. A review made soon after another review has less effect than a review made after a long delay.
+The schedule includes every review that really happened and remains derived from the complete review history.
+
+Wrong device clocks can put reviews in the wrong order.
