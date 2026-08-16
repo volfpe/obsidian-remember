@@ -4,6 +4,7 @@ import {
 	classifyDeckSiblings,
 	introducedTodaySiblingKeys,
 	isDescendantDeck,
+	manuallyBuriedCardIds,
 	noteSiblingKey,
 	reviewedTodaySiblingKeys,
 	type CardAvailability,
@@ -41,6 +42,7 @@ export function buildCardDeckGroups(
 	const availability = classifyDeckSiblings(cards, snapshot.states, now, {
 		introducedToday: introducedTodaySiblingKeys(snapshot.events, now),
 		reviewedToday: reviewedTodaySiblingKeys(snapshot.events, now),
+		manuallyBuriedCardIds: manuallyBuriedCardIds(snapshot.buries, now),
 		newCardsPerDay: effectiveNewCardsPerDay(settings),
 		burySiblings: settings.burySiblings,
 	});

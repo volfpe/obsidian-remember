@@ -8,6 +8,7 @@ const now = new Date(2026, 7, 15, 12);
 function card(id: string, siblings = 1): NoteCard {
 	return {
 		id,
+		suspended: false,
 		kind: 'basic',
 		multiline: false,
 		line: 0,

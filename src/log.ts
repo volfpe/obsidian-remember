@@ -2,7 +2,7 @@
 // These logs are the only scheduling store: no snapshot, no cache file, no database.
 
 import type { App } from 'obsidian';
-import type { LogEvent, ReviewEvent } from './core/events';
+import type { CardEvent, LogEvent, ReviewEvent } from './core/events';
 import { randomId } from './core/id';
 
 const DEVICE_ID_KEY = 'remember-device-id';
@@ -26,13 +26,13 @@ function ownLogPath(app: App): string {
 }
 
 /** True append via the adapter — no read-modify-write. */
-export async function appendEvent(app: App, event: ReviewEvent): Promise<void> {
+export async function appendEvent(app: App, event: CardEvent): Promise<void> {
 	await appendLogEvent(app, event);
 }
 
-/** Appends a tombstone for a review. The original event remains in the log. */
-export async function appendUndoEvent(app: App, reviewId: string): Promise<void> {
-	await appendLogEvent(app, { v: 1, k: 'u', t: new Date().toISOString(), u: reviewId });
+/** Appends a tombstone for a reversible event. The original event remains in the log. */
+export async function appendUndoEvent(app: App, eventId: string): Promise<void> {
+	await appendLogEvent(app, { v: 1, k: 'u', t: new Date().toISOString(), u: eventId });
 }
 
 async function appendLogEvent(app: App, event: LogEvent): Promise<void> {
@@ -41,9 +41,14 @@ async function appendLogEvent(app: App, event: LogEvent): Promise<void> {
 
 /** Active reviews across every device's log. Undo tombstones are applied independent of file order. */
 export async function readEvents(app: App): Promise<ReviewEvent[]> {
+	return (await readCardEvents(app)).filter((event): event is ReviewEvent => event.k === 'r');
+}
+
+/** Active reviews and temporary card actions across every device's log. */
+export async function readCardEvents(app: App): Promise<CardEvent[]> {
 	const adapter = app.vault.adapter;
-	const seenReviews = new Set<string>();
-	const reviews: ReviewEvent[] = [];
+	const seenEvents = new Set<string>();
+	const events: CardEvent[] = [];
 	const undone = new Set<string>();
 	for (const path of (await adapter.list('')).files) {
 		if (!isLogFile(baseName(path))) continue;
@@ -65,12 +70,12 @@ export async function readEvents(app: App): Promise<ReviewEvent[]> {
 				undone.add(event.u);
 				continue;
 			}
-			if (seenReviews.has(event.i)) continue;
-			seenReviews.add(event.i);
-			reviews.push(event);
+			if (seenEvents.has(event.i)) continue;
+			seenEvents.add(event.i);
+			events.push(event);
 		}
 	}
-	return reviews.filter((event) => !undone.has(event.i));
+	return events.filter((event) => !undone.has(event.i));
 }
 
 /**
@@ -113,16 +118,20 @@ function parseLogEventLine(line: string): LogEvent | null {
 	try {
 		const value: unknown = JSON.parse(line);
 		if (typeof value !== 'object' || value === null) return null;
-		const { v, k, i, t, c, s, r, dr, u } = value as Record<string, unknown>;
+		const { v, k, i, t, c, s, r, dr, x, u } = value as Record<string, unknown>;
 		if (v !== 1) return null;
 		if (typeof t !== 'string' || Number.isNaN(Date.parse(t))) return null;
 		if (k === 'u') {
 			if (typeof u !== 'string' || u === '') return null;
 			return { v, k, t, u };
 		}
-		if (k !== 'r') return null;
 		if (typeof i !== 'string' || i === '') return null;
 		if (typeof c !== 'string' || c === '') return null;
+		if (k === 'b') {
+			if (typeof x !== 'string' || Number.isNaN(Date.parse(x))) return null;
+			return { v, k, i, t, c, x };
+		}
+		if (k !== 'r') return null;
 		if (typeof s !== 'number' || !Number.isInteger(s) || s < 0) return null;
 		if (typeof dr !== 'number' || !Number.isFinite(dr) || dr <= 0 || dr > 1) return null;
 		if (r === 1 || r === 2 || r === 3 || r === 4) return { v, k, i, t, c, s, r, dr };

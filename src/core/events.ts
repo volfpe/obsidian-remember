@@ -4,7 +4,7 @@ import type { Grade } from 'ts-fsrs';
  * Compact JSONL key glossary:
  * v = event protocol version; k = event kind; i = review event id; t = UTC timestamp;
  * c = card id; s = sibling index; r = review rating; dr = desired retention provenance;
- * u = id of the review undone by a tombstone.
+ * x = expiry time; u = id of the event undone by a tombstone.
  */
 export interface ReviewEvent {
 	v: 1;
@@ -23,13 +23,27 @@ export interface ReviewEvent {
 	dr: number;
 }
 
+export interface BuryEvent {
+	v: 1;
+	k: 'b';
+	/** Unique event id. */
+	i: string;
+	/** ISO timestamp, UTC. */
+	t: string;
+	/** Card id. */
+	c: string;
+	/** ISO timestamp after which the card is no longer buried. */
+	x: string;
+}
+
 export interface UndoEvent {
 	v: 1;
 	k: 'u';
 	/** ISO timestamp, UTC. */
 	t: string;
-	/** Id of the review event this tombstone cancels. */
+	/** Id of the reversible event this tombstone cancels. */
 	u: string;
 }
 
-export type LogEvent = ReviewEvent | UndoEvent;
+export type CardEvent = ReviewEvent | BuryEvent;
+export type LogEvent = CardEvent | UndoEvent;

@@ -10,7 +10,7 @@ Review history must live in the vault because sync services may ignore parts of 
 
 Give each device a local ID and its own `reviews-<device-id>.rememberlog` file in the vault root. Store one event per JSON line and append new events to the end of the device's log.
 
-Give each review event a unique ID. Undo a review by appending an event that references that ID.
+Give each reversible event a unique ID. Undo an action by appending an event that references that ID.
 
 Read events from every review log.
 

@@ -1,6 +1,6 @@
 import { Rating } from 'ts-fsrs';
 import { describe, expect, it } from 'vitest';
-import type { ReviewEvent } from './events';
+import type { BuryEvent, ReviewEvent } from './events';
 import {
 	buildQueue,
 	classifyDeckSiblings,
@@ -8,6 +8,7 @@ import {
 	dedupeById,
 	introducedTodaySiblingKeys,
 	isDescendantDeck,
+	manuallyBuriedCardIds,
 	returnsToCurrentSession,
 	reviewedTodaySiblingKeys,
 	selectCards,
@@ -19,11 +20,12 @@ const f = makeFsrs(0.9);
 const now = new Date('2026-01-10T12:00:00.000Z');
 
 function card(id: string | null, overrides: Partial<NoteCard> & { reversed?: boolean } = {}): NoteCard {
-	const { reversed = false, ...noteOverrides } = overrides;
+	const { reversed = false, suspended = false, ...noteOverrides } = overrides;
 	const front = `front of ${id}`;
 	const back = `back of ${id}`;
 	return {
 		id,
+		suspended,
 		kind: 'basic',
 		siblings: [
 			{ sub: 0, front, back },
@@ -83,7 +85,7 @@ describe('dedupeById', () => {
 describe('countDeckStats', () => {
 	it('counts only one new sibling per group and reports the other as buried', () => {
 		const counts = countDeckStats([card(null), card('a', { reversed: true })], new Map(), now);
-		expect(counts).toEqual({ due: 0, new: 2, waiting: 0, buried: 1, total: 3 });
+		expect(counts).toEqual({ due: 0, new: 2, waiting: 0, buried: 1, suspended: 0, total: 3 });
 	});
 
 	it('counts a past due as due and a future due as neither', () => {
@@ -97,6 +99,7 @@ describe('countDeckStats', () => {
 			new: 0,
 			waiting: 0,
 			buried: 0,
+			suspended: 0,
 			total: 2,
 		});
 	});
@@ -124,6 +127,7 @@ describe('countDeckStats', () => {
 			new: 1,
 			waiting: 2,
 			buried: 0,
+			suspended: 0,
 			total: 5,
 		});
 	});
@@ -136,6 +140,7 @@ describe('countDeckStats', () => {
 			new: 1,
 			waiting: 1,
 			buried: 2,
+			suspended: 0,
 			total: 4,
 		});
 	});
@@ -143,7 +148,7 @@ describe('countDeckStats', () => {
 	it('counts every eligible sibling when burying is disabled', () => {
 		expect(
 			countDeckStats([card('a', { reversed: true })], new Map(), now, { burySiblings: false }),
-		).toEqual({ due: 0, new: 2, waiting: 0, buried: 0, total: 2 });
+		).toEqual({ due: 0, new: 2, waiting: 0, buried: 0, suspended: 0, total: 2 });
 	});
 });
 
@@ -172,6 +177,49 @@ describe('classifyDeckSiblings', () => {
 			'paired#1': 'buried',
 			'waiting#0': 'waiting',
 		});
+	});
+
+	it('keeps suspended definitions in the catalog and out of queues', () => {
+		const suspended = card('paused', { suspended: true, reversed: true });
+		const availability = classifyDeckSiblings([suspended], new Map(), now);
+
+		expect([...availability.values()]).toEqual(['suspended', 'suspended']);
+		expect(countDeckStats([suspended], new Map(), now)).toEqual({
+			due: 0,
+			new: 0,
+			waiting: 0,
+			buried: 0,
+			suspended: 2,
+			total: 2,
+		});
+		expect(buildQueue([suspended], new Map(), now)).toEqual([]);
+	});
+});
+
+describe('manual burying', () => {
+	const bury = (x: string): BuryEvent => ({
+		v: 1,
+		k: 'b',
+		i: `bury-${x}`,
+		t: '2026-01-10T09:00:00.000Z',
+		c: 'a',
+		x,
+	});
+
+	it('excludes every sibling in a manually buried card until its explicit expiry', () => {
+		const active = manuallyBuriedCardIds([bury('2026-01-11T00:00:00.000Z')], now);
+		expect([...active]).toEqual(['a']);
+		const reversed = card('a', { reversed: true });
+		expect(buildQueue([reversed], new Map(), now, { manuallyBuriedCardIds: active })).toEqual([]);
+		expect(
+			countDeckStats([reversed], new Map(), now, { manuallyBuriedCardIds: active }).buried,
+		).toBe(2);
+	});
+
+	it('releases a manually buried card at the expiry time', () => {
+		const expired = manuallyBuriedCardIds([bury(now.toISOString())], now);
+		expect(expired.size).toBe(0);
+		expect(buildQueue([card('a')], new Map(), now, { manuallyBuriedCardIds: expired })).toHaveLength(1);
 	});
 });
 
@@ -351,6 +399,7 @@ describe('buildQueue', () => {
 			new: 0,
 			waiting: 0,
 			buried: 1,
+			suspended: 0,
 			total: 2,
 		});
 	});

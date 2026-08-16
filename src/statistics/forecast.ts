@@ -1,8 +1,9 @@
 import type { Card as FsrsCard } from 'ts-fsrs';
-import type { ReviewEvent } from '../core/events';
+import type { BuryEvent, ReviewEvent } from '../core/events';
 import {
 	classifyDeckSiblings,
 	introducedTodaySiblingKeys,
+	manuallyBuriedCardIds,
 	noteSiblingKey,
 	reviewedTodaySiblingKeys,
 	type NoteCard,
@@ -18,6 +19,7 @@ export interface ForecastOptions {
 	days?: number;
 	newCardsPerDay?: number;
 	burySiblings?: boolean;
+	buries?: BuryEvent[];
 }
 
 /**
@@ -35,6 +37,7 @@ export function forecastDeck(
 	const days = Math.max(0, Math.floor(options.days ?? 14));
 	const newCardsPerDay = options.newCardsPerDay ?? Number.POSITIVE_INFINITY;
 	const burySiblings = options.burySiblings ?? true;
+	const buries = options.buries ?? [];
 	const introducedToday = introducedTodaySiblingKeys(events, now);
 	const reviewedToday = reviewedTodaySiblingKeys(events, now);
 	let remaining = cards.map((card) => ({
@@ -49,6 +52,7 @@ export function forecastDeck(
 			reviewedToday: offset === 0 ? reviewedToday : undefined,
 			newCardsPerDay,
 			burySiblings,
+			manuallyBuriedCardIds: manuallyBuriedCardIds(buries, endOfLocalDay(now, offset)),
 		});
 		const completed = new Set<string>();
 		let scheduled = 0;

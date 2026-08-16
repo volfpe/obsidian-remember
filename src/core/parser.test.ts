@@ -25,6 +25,7 @@ describe('parseCards', () => {
 		expect(parseCards('front line\n?\nback line')).toEqual([
 			{
 				id: null,
+				suspended: false,
 				kind: 'basic',
 				siblings: [{ sub: 0, front: 'front line', back: 'back line' }],
 				multiline: true,
@@ -80,12 +81,33 @@ describe('parseCards', () => {
 		expect(parseCards('---\ndeck: x\ntitle: "a::b"\n---\nq::a')).toEqual([
 			{
 				id: null,
+				suspended: false,
 				kind: 'basic',
 				siblings: [{ sub: 0, front: 'q', back: 'a' }],
 				multiline: false,
 				line: 4,
 			},
 		]);
+	});
+
+	it('reads and removes a leading suspend marker for every card format', () => {
+		const single = parseCards('{suspend} question::answer %%rem:single%%')[0];
+		const reversed = parseCards('{suspend} front:::back')[0];
+		const cloze = parseCards('{suspend} Capital: {{c1::Paris}}.')[0];
+		const multi = parseCards('%%rem:multi%%\n{suspend} front line\n?\nback line')[0];
+
+		for (const card of [single, reversed, cloze, multi]) expect(card.suspended).toBe(true);
+		expect(firstSibling(single)).toEqual({ sub: 0, front: 'question', back: 'answer' });
+		expect(firstSibling(reversed).front).toBe('front');
+		expect(firstSibling(cloze).back).toBe('Capital: Paris.');
+		expect(firstSibling(multi)).toEqual({ sub: 0, front: 'front line', back: 'back line' });
+	});
+
+	it('treats suspend as content unless it is an exact leading marker', () => {
+		expect(parseCards('Question::answer {suspend}')[0].suspended).toBe(false);
+		expect(parseCards('`{suspend}` Question::Answer')[0].suspended).toBe(false);
+		expect(parseCards('{Suspend} Question::Answer')[0].suspended).toBe(false);
+		expect(parseCards('\\{suspend} Question::Answer')[0].suspended).toBe(false);
 	});
 
 	it('does not parse cards inside fenced code blocks', () => {

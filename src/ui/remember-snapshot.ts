@@ -1,7 +1,7 @@
 import type { App, TFile } from 'obsidian';
 import type { Card as FsrsCard, FSRS } from 'ts-fsrs';
-import { readEvents } from '../log';
-import type { ReviewEvent } from '../core/events';
+import { readCardEvents } from '../log';
+import type { BuryEvent, ReviewEvent } from '../core/events';
 import { parseCards } from '../core/parser';
 import { selectCards, type NoteCard } from '../core/queue';
 import { foldEvents } from '../core/scheduler';
@@ -16,6 +16,7 @@ export interface RememberSnapshot {
 	loadedAt: Date;
 	cards: NoteCard[];
 	events: ReviewEvent[];
+	buries: BuryEvent[];
 	states: Map<string, FsrsCard>;
 	issues: RememberSnapshotIssues;
 }
@@ -36,12 +37,15 @@ export class RememberSnapshotRepository {
 	) {}
 
 	async load(): Promise<RememberSnapshot> {
-		const [scan, events] = await Promise.all([this.scanCards(), readEvents(this.app)]);
+		const [scan, cardEvents] = await Promise.all([this.scanCards(), readCardEvents(this.app)]);
+		const events = cardEvents.filter((event): event is ReviewEvent => event.k === 'r');
+		const buries = cardEvents.filter((event): event is BuryEvent => event.k === 'b');
 		const selection = selectCards(scan.cards);
 		return {
 			loadedAt: new Date(),
 			cards: selection.kept,
 			events,
+			buries,
 			states: foldEvents(this.fsrs, events),
 			issues: {
 				duplicates: selection.dropped,

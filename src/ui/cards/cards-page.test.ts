@@ -1,4 +1,5 @@
 import { App } from 'obsidian-test-mocks/obsidian';
+import { State, type Card as FsrsCard } from 'ts-fsrs';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import type { NoteCard } from '../../core/queue';
 import { DEFAULT_SETTINGS } from '../../settings';
@@ -9,6 +10,7 @@ function snapshot(): RememberSnapshot {
 	const cards: NoteCard[] = [
 		{
 			id: 'first-card',
+			suspended: false,
 			kind: 'basic',
 			multiline: false,
 			line: 4,
@@ -24,6 +26,7 @@ function snapshot(): RememberSnapshot {
 		loadedAt: new Date('2026-08-15T12:00:00.000Z'),
 		cards,
 		events: [],
+		buries: [],
 		states: new Map(),
 		issues: { duplicates: [], invalidDeckPaths: [] },
 	};
@@ -88,6 +91,32 @@ describe('Cards page', () => {
 		container.querySelector<HTMLButtonElement>('.remember-card-detail-back')?.click();
 
 		expect(container.querySelector<HTMLElement>('.remember-card-list')?.scrollTop).toBe(120);
+		page.unload();
+	});
+
+	it('labels an already-due schedule as Now in the list and detail', () => {
+		const app = App.createConfigured__().asOriginalType__();
+		const page = new CardsPage(app);
+		const container = createDiv();
+		const data = snapshot();
+		const dueState: FsrsCard = {
+			due: new Date('2020-01-01T00:00:00.000Z'),
+			stability: 1,
+			difficulty: 5,
+			elapsed_days: 1,
+			scheduled_days: 1,
+			reps: 1,
+			lapses: 0,
+			state: State.Review,
+			last_review: new Date('2019-12-31T00:00:00.000Z'),
+			learning_steps: 0,
+		};
+		data.states.set('first-card#0', dueState);
+
+		page.render(container, data, 'Language', { ...DEFAULT_SETTINGS });
+
+		expect(container.querySelector('.remember-card-row .remember-card-due')?.textContent).toBe('Now');
+		expect(container.querySelector('.remember-card-metadata')?.textContent).toContain('DueNow');
 		page.unload();
 	});
 });

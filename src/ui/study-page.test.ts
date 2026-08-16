@@ -10,6 +10,7 @@ function snapshot(): RememberSnapshot {
 	const cards: NoteCard[] = [
 		{
 			id: null,
+			suspended: false,
 			kind: 'basic',
 			multiline: false,
 			line: 1,
@@ -22,6 +23,7 @@ function snapshot(): RememberSnapshot {
 		loadedAt: now,
 		cards,
 		events: [],
+		buries: [],
 		states: new Map(),
 		issues: { duplicates: [], invalidDeckPaths: [] },
 	};
@@ -48,8 +50,33 @@ describe('deck-first study pages', () => {
 		expect(parent.querySelector('.remember-count-waiting')?.getAttribute('aria-label')).toContain(
 			'held for a future day by the daily limit',
 		);
+		expect(parent.querySelector('.remember-deck-header-count-suspended')).toBeNull();
 		rows[0].click();
 		expect(selectDeck).toHaveBeenCalledWith('Language');
+	});
+
+	it('shows suspended counts only when the selected scope contains suspended cards', () => {
+		const parent = createDiv();
+		const data = snapshot();
+		data.cards[0].suspended = true;
+		data.cards[0].siblings.push({ sub: 1, front: 'hello', back: 'hola' });
+
+		renderDeckChooser(parent, data, { ...DEFAULT_SETTINGS }, vi.fn(), now);
+
+		expect(parent.querySelector('.remember-deck-header-count-suspended')?.textContent).toBe(
+			'Suspended',
+		);
+		expect(
+			Array.from(parent.querySelectorAll('.remember-count-suspended')).map((item) => item.textContent),
+		).toEqual(['2', '2']);
+		expect(parent.querySelector('.remember-count-suspended')?.getAttribute('aria-label')).toContain(
+			'excluded from review',
+		);
+
+		renderDeckStudyPage(parent, data, { ...DEFAULT_SETTINGS }, 'Language', vi.fn(), now);
+
+		expect(parent.querySelector('.remember-deck-status-suspended')?.textContent).toBe('2Suspended');
+		expect(parent.querySelector('.remember-start-review')).toBeNull();
 	});
 
 	it('starts review from the selected deck page and hides the action when nothing is ready', () => {
@@ -69,6 +96,9 @@ describe('deck-first study pages', () => {
 		expect(
 			parent.querySelector('.remember-deck-status-due')?.getAttribute('aria-label'),
 		).toContain('Cards scheduled for review now.');
+		expect(parent.querySelector('.remember-deck-status-waiting')).toBeNull();
+		expect(parent.querySelector('.remember-deck-status-buried')).toBeNull();
+		expect(parent.querySelector('.remember-deck-status-suspended')).toBeNull();
 		expect(parent.textContent).toContain('Upcoming 14 days');
 		button.click();
 		expect(start).toHaveBeenCalledOnce();
@@ -83,5 +113,6 @@ describe('deck-first study pages', () => {
 		);
 		expect(parent.querySelector('.remember-start-review')).toBeNull();
 		expect(parent.textContent).toContain('No cards to review');
+		expect(parent.querySelector('.remember-deck-status-waiting')?.textContent).toBe('1Waiting');
 	});
 });

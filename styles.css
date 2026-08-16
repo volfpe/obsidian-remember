@@ -273,7 +273,7 @@ button.remember-start-review {
 
 .remember-deck-status {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(var(--remember-deck-status-columns, 3), minmax(0, 1fr));
 	overflow: hidden;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
@@ -321,6 +321,10 @@ button.remember-start-review {
 
 .remember-deck-status-buried .remember-deck-status-value {
 	color: var(--color-purple);
+}
+
+.remember-deck-status-suspended .remember-deck-status-value {
+	color: var(--text-faint);
 }
 
 .remember-forecast {
@@ -610,6 +614,10 @@ button.remember-card-row.is-selected {
 	color: var(--text-muted);
 }
 
+.remember-card-availability-suspended {
+	color: var(--text-faint);
+}
+
 .remember-card-detail {
 	display: flex;
 	min-width: 0;
@@ -758,25 +766,14 @@ button.remember-card-row.is-selected {
 
 .remember-deck-header {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 44px 44px 52px;
+	grid-template-columns: minmax(0, 1fr) var(--remember-deck-count-columns);
+	gap: 8px;
 	align-items: center;
 	padding: 7px 10px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 	font-weight: var(--font-semibold);
-}
-
-.remember-has-waiting .remember-deck-header {
-	grid-template-columns: minmax(0, 1fr) 44px 44px 58px 52px;
-}
-
-.remember-has-buried .remember-deck-header {
-	grid-template-columns: minmax(0, 1fr) 44px 44px 54px 52px;
-}
-
-.remember-has-waiting.remember-has-buried .remember-deck-header {
-	grid-template-columns: minmax(0, 1fr) 44px 44px 58px 54px 52px;
 }
 
 .remember-deck-header-count {
@@ -817,22 +814,11 @@ button.remember-deck-row:hover:not(:disabled) {
 
 .remember-deck-counts {
 	display: grid;
-	grid-template-columns: 44px 44px 52px;
+	grid-template-columns: var(--remember-deck-count-columns);
+	gap: 8px;
 	font-variant-numeric: tabular-nums;
 	font-size: var(--font-ui-small);
 	text-align: right;
-}
-
-.remember-has-waiting .remember-deck-counts {
-	grid-template-columns: 44px 44px 58px 52px;
-}
-
-.remember-has-buried .remember-deck-counts {
-	grid-template-columns: 44px 44px 54px 52px;
-}
-
-.remember-has-waiting.remember-has-buried .remember-deck-counts {
-	grid-template-columns: 44px 44px 58px 54px 52px;
 }
 
 .remember-count-due {
@@ -849,6 +835,10 @@ button.remember-deck-row:hover:not(:disabled) {
 
 .remember-count-buried {
 	color: var(--color-purple);
+}
+
+.remember-count-suspended {
+	color: var(--text-faint);
 }
 
 .remember-count-total {
@@ -1101,9 +1091,11 @@ button.remember-refresh.is-loading svg {
 
 	.remember-deck-header-count-waiting,
 	.remember-deck-header-count-buried,
+	.remember-deck-header-count-suspended,
 	.remember-deck-header-count-total,
 	.remember-count-waiting,
 	.remember-count-buried,
+	.remember-count-suspended,
 	.remember-count-total {
 		display: none;
 	}

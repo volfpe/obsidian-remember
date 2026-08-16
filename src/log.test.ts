@@ -1,7 +1,7 @@
 import { App } from 'obsidian-test-mocks/obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ReviewEvent } from './core/events';
-import { appendEvent, appendUndoEvent, cleanOwnConflictCopies, getDeviceId, readEvents } from './log';
+import type { BuryEvent, ReviewEvent } from './core/events';
+import { appendEvent, appendUndoEvent, cleanOwnConflictCopies, getDeviceId, readCardEvents, readEvents } from './log';
 
 const deviceId = 'device0000001';
 
@@ -100,5 +100,23 @@ describe('append-only undo', () => {
 		expect(lines).toHaveLength(3);
 		expect(JSON.parse(lines[2])).toMatchObject({ v: 1, k: 'u', u: first.i });
 		expect(await readEvents(app)).toEqual([second]);
+	});
+
+	it('uses the same tombstone to undo a temporary bury event', async () => {
+		const bury: BuryEvent = {
+			v: 1,
+			k: 'b',
+			i: 'bury-card1',
+			t: '2026-08-11T09:14:03.120Z',
+			c: 'card1',
+			x: '2026-08-12T00:00:00.000Z',
+		};
+		const app = appWithFiles();
+
+		await appendEvent(app, bury);
+		expect(await readCardEvents(app)).toEqual([bury]);
+		await appendUndoEvent(app, bury.i);
+
+		expect(await readCardEvents(app)).toEqual([]);
 	});
 });

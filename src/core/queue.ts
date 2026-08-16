@@ -1,7 +1,7 @@
 // Pure cards + states -> ordered review queue and due/new counts. No Obsidian imports.
 
 import type { Card as FsrsCard } from 'ts-fsrs';
-import type { ReviewEvent } from './events';
+import type { BuryEvent, ReviewEvent } from './events';
 import type { ParsedCard } from './parser';
 import { siblingKey } from './scheduler';
 
@@ -42,14 +42,17 @@ export interface DeckCounts {
 	waiting: number;
 	/** Due or new siblings held until another study day. */
 	buried: number;
+	/** Siblings excluded by persistent Markdown configuration. */
+	suspended: number;
 	total: number;
 }
 
-export type CardAvailability = 'due' | 'new' | 'waiting' | 'buried' | 'scheduled';
+export type CardAvailability = 'due' | 'new' | 'waiting' | 'buried' | 'scheduled' | 'suspended';
 
 export interface DeckStatsOptions {
 	introducedToday?: ReadonlySet<string>;
 	reviewedToday?: ReadonlySet<string>;
+	manuallyBuriedCardIds?: ReadonlySet<string>;
 	newCardsPerDay?: number;
 	burySiblings?: boolean;
 }
@@ -57,6 +60,7 @@ export interface DeckStatsOptions {
 export interface QueueOptions {
 	maxNewCards?: number;
 	reviewedToday?: ReadonlySet<string>;
+	manuallyBuriedCardIds?: ReadonlySet<string>;
 	burySiblings?: boolean;
 }
 
@@ -147,6 +151,15 @@ export function reviewedTodaySiblingKeys(events: ReviewEvent[], now: Date): Set<
 	return reviewed;
 }
 
+/** Card groups with an active manual bury whose explicit expiry is still in the future. */
+export function manuallyBuriedCardIds(events: BuryEvent[], now: Date): Set<string> {
+	const buried = new Set<string>();
+	for (const event of events) {
+		if (new Date(event.x).getTime() > now.getTime()) buried.add(event.c);
+	}
+	return buried;
+}
+
 function allSiblings(
 	cards: NoteCard[],
 	states: Map<string, FsrsCard>,
@@ -177,9 +190,13 @@ function availableSiblings(
 	cards: NoteCard[],
 	states: Map<string, FsrsCard>,
 	now: Date,
+	manuallyBuriedCardIds: ReadonlySet<string> = new Set<string>(),
 ): AvailableSibling[] {
 	return allSiblings(cards, states, now).filter(
-		(sibling) => sibling.state === null || sibling.showAt.getTime() <= now.getTime(),
+		(sibling) =>
+			!sibling.card.suspended &&
+			(sibling.card.id === null || !manuallyBuriedCardIds.has(sibling.card.id)) &&
+			(sibling.state === null || sibling.showAt.getTime() <= now.getTime()),
 	);
 }
 
@@ -239,18 +256,23 @@ export function classifyDeckSiblings(
 	const {
 		introducedToday = new Set<string>(),
 		reviewedToday = new Set<string>(),
+		manuallyBuriedCardIds = new Set<string>(),
 		newCardsPerDay = Number.POSITIVE_INFINITY,
 		burySiblings = true,
 	} = options;
 	const availability = new Map<string, CardAvailability>();
 	for (const sibling of allSiblings(cards, states, now)) {
-		if (sibling.state !== null && sibling.showAt.getTime() > now.getTime()) {
+		if (sibling.card.suspended) {
+			availability.set(noteSiblingKey(sibling.card, sibling.sub), 'suspended');
+		} else if (sibling.card.id !== null && manuallyBuriedCardIds.has(sibling.card.id)) {
+			availability.set(noteSiblingKey(sibling.card, sibling.sub), 'buried');
+		} else if (sibling.state !== null && sibling.showAt.getTime() > now.getTime()) {
 			availability.set(noteSiblingKey(sibling.card, sibling.sub), 'scheduled');
 		}
 	}
 
 	const selection = applySiblingBurying(
-		availableSiblings(cards, states, now),
+		availableSiblings(cards, states, now, manuallyBuriedCardIds),
 		reviewedToday,
 		burySiblings,
 	);
@@ -296,6 +318,7 @@ export function countDeckStats(
 	const {
 		introducedToday = new Set<string>(),
 		reviewedToday = new Set<string>(),
+		manuallyBuriedCardIds = new Set<string>(),
 		newCardsPerDay = Number.POSITIVE_INFINITY,
 		burySiblings = true,
 	} = options;
@@ -306,10 +329,11 @@ export function countDeckStats(
 	const availability = classifyDeckSiblings(cards, states, now, {
 		introducedToday,
 		reviewedToday,
+		manuallyBuriedCardIds,
 		newCardsPerDay,
 		burySiblings,
 	});
-	const counts = { due: 0, new: 0, waiting: 0, buried: 0 };
+	const counts = { due: 0, new: 0, waiting: 0, buried: 0, suspended: 0 };
 	for (const value of availability.values()) {
 		if (value !== 'scheduled') counts[value]++;
 	}
@@ -329,6 +353,7 @@ export function buildQueue(
 	const {
 		maxNewCards = Number.POSITIVE_INFINITY,
 		reviewedToday = new Set<string>(),
+		manuallyBuriedCardIds = new Set<string>(),
 		burySiblings = true,
 	} = options;
 	const due: { item: QueueItem; tiebreak: number }[] = [];
@@ -338,6 +363,7 @@ export function buildQueue(
 			cards.filter((card) => card.id !== null),
 			states,
 			now,
+			manuallyBuriedCardIds,
 		),
 		reviewedToday,
 		burySiblings,

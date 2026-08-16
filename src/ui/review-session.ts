@@ -8,14 +8,15 @@ import {
 	type App,
 } from 'obsidian';
 import { Rating, type FSRS, type Grade } from 'ts-fsrs';
-import { appendEvent, appendUndoEvent, readEvents } from '../log';
-import type { ReviewEvent } from '../core/events';
+import { appendEvent, appendUndoEvent, readCardEvents } from '../log';
+import type { BuryEvent, CardEvent, ReviewEvent } from '../core/events';
 import { randomId } from '../core/id';
 import { parseCards } from '../core/parser';
 import {
 	buildQueue,
 	countDeckStats,
 	introducedTodaySiblingKeys,
+	manuallyBuriedCardIds,
 	returnsToCurrentSession,
 	reviewedTodaySiblingKeys,
 	selectCards,
@@ -30,10 +31,11 @@ import type { RememberSnapshotRepository } from './remember-snapshot';
 import { openCardDefinition } from './open-card-definition';
 
 interface UndoEntry {
-	/** The item as presented — its state is the pre-rating state. */
+	/** The item as presented before the reversible action. */
 	item: QueueItem;
-	event: ReviewEvent;
-	advancedProgress: boolean;
+	event: CardEvent;
+	progressDelta: number;
+	removedSiblings: QueueItem[];
 }
 
 export class ReviewSession extends Component {
@@ -61,6 +63,12 @@ export class ReviewSession extends Component {
 
 	get active(): boolean {
 		return this.phase !== 'idle';
+	}
+
+	override onload(): void {
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => void this.refreshCurrentDefinition()),
+		);
 	}
 
 	override onunload(): void {
@@ -101,21 +109,26 @@ export class ReviewSession extends Component {
 
 			const selection = selectCards([...allByPath.values()].flat(), deck);
 			this.reportDuplicates(selection.dropped);
-			const events = await readEvents(this.app);
+			const cardEvents = await readCardEvents(this.app);
+			const events = cardEvents.filter((event): event is ReviewEvent => event.k === 'r');
+			const buries = cardEvents.filter((event): event is BuryEvent => event.k === 'b');
 			const states = foldEvents(this.fsrs, events);
 			const now = new Date();
 			const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
 			const introducedToday = introducedTodaySiblingKeys(events, now);
 			const reviewedToday = reviewedTodaySiblingKeys(events, now);
+			const buriedCardIds = manuallyBuriedCardIds(buries, now);
 			const counts = countDeckStats(selection.kept, states, now, {
 				introducedToday,
 				reviewedToday,
+				manuallyBuriedCardIds: buriedCardIds,
 				newCardsPerDay,
 				burySiblings: this.settings.burySiblings,
 			});
 			this.queue = buildQueue(selection.kept, states, now, {
 				maxNewCards: counts.new,
 				reviewedToday,
+				manuallyBuriedCardIds: buriedCardIds,
 				burySiblings: this.settings.burySiblings,
 			});
 			this.sessionTotal = this.queue.length;
@@ -176,6 +189,13 @@ export class ReviewSession extends Component {
 		source.addEventListener('click', () => {
 			if (this.current) void openCardDefinition(this.app, this.current);
 		});
+		const bury = actions.createEl('button', {
+			cls: 'clickable-icon remember-session-bury',
+		});
+		setIcon(bury, 'archive');
+		setTooltip(bury, STRINGS.review.buryToday);
+		bury.setAttribute('aria-label', STRINGS.review.buryToday);
+		bury.addEventListener('click', () => void this.bury());
 		actions.createSpan({ cls: 'remember-session-action-divider', attr: { 'aria-hidden': 'true' } });
 		const back = actions.createEl('button', {
 			cls: 'clickable-icon remember-session-back',
@@ -281,7 +301,12 @@ export class ReviewSession extends Component {
 			}
 			const next = applyRating(this.fsrs, item.state, when, grade);
 			const reentersSession = returnsToCurrentSession(next.due, when);
-			this.undoStack.push({ item, event, advancedProgress: !reentersSession });
+			this.undoStack.push({
+				item,
+				event,
+				progressDelta: reentersSession ? 0 : 1,
+				removedSiblings: [],
+			});
 			if (reentersSession) {
 				this.enqueue({ ...item, state: next, showAt: next.due });
 			} else {
@@ -291,6 +316,70 @@ export class ReviewSession extends Component {
 		} finally {
 			this.busy = false;
 		}
+	}
+
+	async bury(): Promise<void> {
+		const item = this.current;
+		if (!item || this.phase === 'idle' || this.busy) return;
+		this.busy = true;
+		try {
+			const when = new Date();
+			const event: BuryEvent = {
+				v: 1,
+				k: 'b',
+				i: randomId(),
+				t: when.toISOString(),
+				c: item.cardId,
+				x: startOfNextLocalDay(when).toISOString(),
+			};
+			try {
+				await appendEvent(this.app, event);
+			} catch (error) {
+				new Notice(STRINGS.notices.couldNotSaveBury(error));
+				return;
+			}
+			const removedSiblings = this.queue.filter((queued) => queued.cardId === item.cardId);
+			this.queue = this.queue.filter((queued) => queued.cardId !== item.cardId);
+			const progressDelta = removedSiblings.length + 1;
+			this.undoStack.push({ item, event, progressDelta, removedSiblings });
+			this.sessionCompleted += progressDelta;
+			this.showNext();
+		} finally {
+			this.busy = false;
+		}
+	}
+
+	private async refreshCurrentDefinition(): Promise<void> {
+		const item = this.current;
+		if (!item || this.phase === 'idle' || this.busy) return;
+		const file = this.app.vault.getAbstractFileByPath(item.path);
+		if (!(file instanceof TFile)) return;
+		let definition: ReturnType<typeof parseCards>[number] | undefined;
+		try {
+			definition = parseCards(await this.app.vault.cachedRead(file)).find(
+				(card) => card.id === item.cardId,
+			);
+		} catch (error) {
+			console.warn(`Remember: could not refresh ${item.path} after editing`, error);
+			return;
+		}
+		if (!definition) return;
+		if (definition.suspended) {
+			const queuedSiblings = this.queue.filter((queued) => queued.cardId === item.cardId).length;
+			this.queue = this.queue.filter((queued) => queued.cardId !== item.cardId);
+			this.sessionTotal = Math.max(
+				this.sessionCompleted,
+				this.sessionTotal - queuedSiblings - 1,
+			);
+			this.showNext();
+			return;
+		}
+		const sibling = definition.siblings.find(({ sub }) => sub === item.sub);
+		if (!sibling) return;
+		if (sibling.front === item.front && sibling.back === item.back && definition.line === item.line) return;
+		this.current = { ...item, front: sibling.front, back: sibling.back, line: definition.line };
+		if (this.phase === 'question') this.showQuestion();
+		else this.showAnswer();
 	}
 
 	async undo(): Promise<void> {
@@ -307,11 +396,12 @@ export class ReviewSession extends Component {
 				return;
 			}
 			this.undoStack.pop();
-			if (entry.advancedProgress) this.sessionCompleted--;
+			this.sessionCompleted -= entry.progressDelta;
 			const shown = this.current;
 			this.current = entry.item;
 			if (shown && !sameSibling(shown, entry.item)) this.enqueue(shown);
 			this.queue = this.queue.filter((queued) => !sameSibling(queued, entry.item));
+			for (const sibling of entry.removedSiblings) this.enqueue(sibling);
 			this.showQuestion();
 		} finally {
 			this.busy = false;
@@ -359,4 +449,8 @@ function groupByPath(cards: NoteCard[]): Map<string, NoteCard[]> {
 		else byPath.set(card.path, [card]);
 	}
 	return byPath;
+}
+
+function startOfNextLocalDay(now: Date): Date {
+	return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 }

@@ -39,6 +39,7 @@ function snapshot(cards: NoteCard[], events: ReviewEvent[] = []): RememberSnapsh
 		loadedAt: new Date('2026-08-15T12:00:00.000Z'),
 		cards,
 		events,
+		buries: [],
 		states: new Map([['card-one#0', reviewState()]]),
 		issues: { duplicates: [], invalidDeckPaths: [] },
 	};
@@ -49,6 +50,7 @@ describe('Cards catalog', () => {
 		const cards: NoteCard[] = [
 			{
 				id: 'card-one',
+				suspended: false,
 				kind: 'basic',
 				multiline: false,
 				line: 4,
@@ -84,6 +86,7 @@ describe('Cards catalog', () => {
 		const cards: NoteCard[] = [
 			{
 				id: null,
+				suspended: false,
 				kind: 'cloze',
 				multiline: false,
 				line: 8,
@@ -110,6 +113,7 @@ describe('Cards catalog', () => {
 		const cards: NoteCard[] = [
 			{
 				id: null,
+				suspended: false,
 				kind: 'basic',
 				multiline: false,
 				line: 1,
@@ -119,6 +123,7 @@ describe('Cards catalog', () => {
 			},
 			{
 				id: null,
+				suspended: false,
 				kind: 'basic',
 				multiline: false,
 				line: 1,
@@ -136,5 +141,27 @@ describe('Cards catalog', () => {
 		);
 
 		expect(groups.map((group) => group.deck)).toEqual(['Language/Spanish']);
+	});
+
+	it('keeps a suspended card visible with suspended availability', () => {
+		const suspended: NoteCard = {
+			id: 'paused',
+			suspended: true,
+			kind: 'basic',
+			multiline: false,
+			line: 2,
+			path: 'paused.md',
+			deck: 'Language',
+			siblings: [{ sub: 0, front: 'hola', back: 'hello' }],
+		};
+
+		const groups = buildCardDeckGroups(
+			{ ...snapshot([suspended]), states: new Map() },
+			'Language',
+			{ ...DEFAULT_SETTINGS },
+			new Date('2026-08-15T12:00:00.000Z'),
+		);
+
+		expect(groups[0].items[0].availability).toBe('suspended');
 	});
 });

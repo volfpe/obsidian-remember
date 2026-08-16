@@ -14,7 +14,10 @@ interface ReviewSessionHarness {
 	leave(): Promise<void>;
 	phase: 'idle' | 'question' | 'answer';
 	queue: QueueItem[];
+	refreshCurrentDefinition(): Promise<void>;
+	sessionTotal: number;
 	sessionCompleted: number;
+	bury(): Promise<void>;
 	rate(grade: Grade): Promise<void>;
 	undo(): Promise<void>;
 }
@@ -119,9 +122,68 @@ describe('session progress', () => {
 
 		expect(session.container?.querySelector('.remember-session-undo')).not.toBeNull();
 		expect(session.container?.querySelector('.remember-session-source')).not.toBeNull();
+		expect(session.container?.querySelector('.remember-session-bury')).not.toBeNull();
 		session.container?.querySelector<HTMLButtonElement>('.remember-show-answer')?.click();
 		expect(session.container?.querySelector('.remember-session-undo')).toBeNull();
 		expect(session.container?.querySelector('.remember-session-source')).not.toBeNull();
+		expect(session.container?.querySelector('.remember-session-bury')).not.toBeNull();
+	});
+
+	it('buries the current card until tomorrow and restores it through normal undo', async () => {
+		const { app, session } = makeHarness();
+
+		await session.bury();
+
+		expect(session.current?.cardId).toBe('second');
+		expect(session.sessionCompleted).toBe(1);
+		const lines = (await app.vault.adapter.read('reviews-device0000001.rememberlog'))
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		expect(lines[0]).toMatchObject({ k: 'b', c: 'first' });
+		expect(lines[0]).not.toHaveProperty('s');
+		expect(new Date(String(lines[0].x)).getTime()).toBeGreaterThan(new Date(String(lines[0].t)).getTime());
+
+		await session.undo();
+
+		expect(session.current?.cardId).toBe('first');
+		expect(session.sessionCompleted).toBe(0);
+		const finalLines = (await app.vault.adapter.read('reviews-device0000001.rememberlog'))
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		expect(finalLines[1]).toMatchObject({ k: 'u', u: lines[0].i });
+	});
+
+	it('removes and restores every queued sibling when manually burying a card', async () => {
+		const { session } = makeHarness();
+		const sibling = { ...item('first'), sub: 1 };
+		session.queue = [sibling, item('second')];
+		session.sessionTotal = 3;
+
+		await session.bury();
+
+		expect(session.current?.cardId).toBe('second');
+		expect(session.queue).toEqual([]);
+		expect(session.sessionCompleted).toBe(2);
+
+		await session.undo();
+
+		expect(session.current).toMatchObject({ cardId: 'first', sub: 0 });
+		expect(session.queue).toEqual(expect.arrayContaining([sibling, expect.objectContaining({ cardId: 'second' })]));
+		expect(session.sessionCompleted).toBe(0);
+	});
+
+	it('skips the current card after its source is marked as suspended', async () => {
+		const { app, session } = makeHarness();
+		session.sessionTotal = 2;
+		const file = app.vault.getFileByPath('note.md')!;
+		await app.vault.modify(file, '{suspend} q::a %%rem:first%%');
+
+		await session.refreshCurrentDefinition();
+
+		expect(session.current?.cardId).toBe('second');
+		expect(session.sessionTotal).toBe(1);
 	});
 
 	it('returns to Study when leaving early', async () => {

@@ -41,7 +41,11 @@ export const STRINGS = {
 			},
 			buried: {
 				label: 'Buried',
-				tooltip: 'Cards held until another study day so only one sibling from each card is eligible (from reverse-direction or cloze cards).',
+				tooltip: 'Cards held until another study day, either manually or because a reverse-direction or cloze sibling is being reviewed.',
+			},
+			suspended: {
+				label: 'Suspended',
+				tooltip: 'Cards excluded from review.',
 			},
 			total: {
 				label: 'Total',
@@ -60,8 +64,9 @@ export const STRINGS = {
 			good: 'Good',
 			easy: 'Easy',
 		},
-		undoAria: 'Undo last review',
+		undoAria: 'Undo last action',
 		openDefinition: 'Open card definition',
+		buryToday: 'Bury card until tomorrow',
 	},
 	study: {
 		backToDecks: 'Choose another deck',
@@ -101,7 +106,7 @@ export const STRINGS = {
 		history: 'Review history',
 		noHistory: 'This card has not been reviewed yet.',
 		openSource: (path: string) => `Open ${path}`,
-		dueNow: 'Due',
+		dueNow: 'Now',
 		dueIn: (interval: string) => `In ${interval}`,
 		notScheduled: '—',
 		fields: {
@@ -117,13 +122,15 @@ export const STRINGS = {
 			waiting: 'Waiting',
 			buried: 'Buried',
 			scheduled: 'Scheduled',
+			suspended: 'Suspended',
 		},
 		availabilityDescriptions: {
 			due: 'Ready to review now.',
 			new: 'Available to introduce in the next review.',
 			waiting: 'New, but postponed by the daily new-card limit.',
-			buried: 'Hidden for today because a sibling card is being reviewed.',
+			buried: 'Hidden until the next study day.',
 			scheduled: 'Already reviewed and scheduled for a future date.',
+			suspended: 'Excluded from review.',
 		},
 		states: {
 			new: 'New',
@@ -149,6 +156,7 @@ export const STRINGS = {
 		invalidDeckProperty: (path: string) =>
 			`Remember: ${path} has an invalid deck property; expected a single value, not a list or object.`,
 		couldNotSaveReview: (error: unknown) => `Remember: could not save the review — ${String(error)}`,
+		couldNotSaveBury: (error: unknown) => `Remember: could not bury the card — ${String(error)}`,
 		couldNotSaveUndo: (error: unknown) => `Remember: could not save the undo — ${String(error)}`,
 		couldNotRefresh: (error: unknown) => `Remember: could not refresh — ${String(error)}`,
 		couldNotStartSession: (error: unknown) =>
