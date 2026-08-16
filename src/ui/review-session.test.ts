@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueueItem } from '../core/queue';
 import { makeFsrs } from '../core/scheduler';
 import { DEFAULT_SETTINGS } from '../settings';
-import { RememberSnapshotRepository } from './remember-snapshot';
 import { ReviewSession } from './review-session';
 
 interface ReviewSessionHarness {
@@ -53,9 +52,8 @@ function makeHarness(): {
 	const app = mockApp.asOriginalType__();
 	const settings = { ...DEFAULT_SETTINGS };
 	const fsrs = makeFsrs(settings.desiredRetention);
-	const repository = new RememberSnapshotRepository(app, settings, fsrs);
 	const finished = vi.fn(async () => undefined);
-	const actual = new ReviewSession(app, settings, fsrs, repository, finished);
+	const actual = new ReviewSession(app, settings, fsrs, finished);
 	actual.load();
 	const session = actual as unknown as ReviewSessionHarness;
 	session.container = createDiv();

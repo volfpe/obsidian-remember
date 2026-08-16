@@ -8,7 +8,7 @@ import {
 	type App,
 } from 'obsidian';
 import { Rating, type FSRS, type Grade } from 'ts-fsrs';
-import { appendEvent, appendUndoEvent, readCardEvents } from '../log';
+import { appendEvent, appendUndoEvent } from '../log';
 import type { BuryEvent, CardEvent, ReviewEvent } from '../core/events';
 import { randomId } from '../core/id';
 import { parseCards } from '../core/parser';
@@ -20,15 +20,13 @@ import {
 	returnsToCurrentSession,
 	reviewedTodaySiblingKeys,
 	selectCards,
-	type NoteCard,
 	type QueueItem,
 } from '../core/queue';
-import { applyRating, foldEvents, formatInterval, previewDue } from '../core/scheduler';
+import { applyRating, formatInterval, previewDue } from '../core/scheduler';
 import { STRINGS } from '../i18n';
 import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
-import { stampNote } from '../stamper';
-import type { RememberSnapshotRepository } from './remember-snapshot';
 import { openCardDefinition } from './open-card-definition';
+import type { RememberSnapshot } from './remember-snapshot';
 
 interface UndoEntry {
 	/** The item as presented before the reversible action. */
@@ -55,7 +53,6 @@ export class ReviewSession extends Component {
 		private app: App,
 		private settings: RememberSettings,
 		private fsrs: FSRS,
-		private snapshotRepository: RememberSnapshotRepository,
 		private onFinish: () => Promise<void>,
 	) {
 		super();
@@ -75,45 +72,14 @@ export class ReviewSession extends Component {
 		this.reset();
 	}
 
-	async start(parent: HTMLElement, deck: string): Promise<void> {
+	async start(parent: HTMLElement, deck: string, snapshot: RememberSnapshot): Promise<void> {
 		if (this.busy) return;
 		this.busy = true;
 		this.container = parent;
 		try {
-			const allCards = (await this.snapshotRepository.scanCards()).cards;
-			const parsed = selectCards(allCards, deck).kept;
-			const allByPath = groupByPath(allCards);
-
-			// Stamp every unstamped card entering the session — one atomic vault.process per note.
-			const byPath = groupByPath(parsed);
-			for (const [path, fileCards] of byPath) {
-				if (fileCards.every((card) => card.id !== null)) continue;
-				const file = this.app.vault.getAbstractFileByPath(path);
-				if (!(file instanceof TFile)) {
-					allByPath.delete(path);
-					continue;
-				}
-				try {
-					const stamped = await stampNote(this.app, file);
-					allByPath.set(
-						path,
-						parseCards(stamped).map((card) => ({ ...card, path, deck: fileCards[0].deck })),
-					);
-				} catch (error) {
-					console.warn(
-						`Remember: could not stamp ${path}; its unstamped cards sit this session out`,
-						error,
-					);
-				}
-			}
-
-			const selection = selectCards([...allByPath.values()].flat(), deck);
-			this.reportDuplicates(selection.dropped);
-			const cardEvents = await readCardEvents(this.app);
-			const events = cardEvents.filter((event): event is ReviewEvent => event.k === 'r');
-			const buries = cardEvents.filter((event): event is BuryEvent => event.k === 'b');
-			const states = foldEvents(this.fsrs, events);
-			const now = new Date();
+			const selection = selectCards(snapshot.cards, deck);
+			const { events, buries, states } = snapshot;
+			const now = snapshot.loadedAt;
 			const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
 			const introducedToday = introducedTodaySiblingKeys(events, now);
 			const reviewedToday = reviewedTodaySiblingKeys(events, now);
@@ -429,26 +395,10 @@ export class ReviewSession extends Component {
 		this.progressEl = null;
 		this.progressCurrentEl = null;
 	}
-
-	private reportDuplicates(duplicates: NoteCard[]): void {
-		for (const duplicate of duplicates) {
-			new Notice(STRINGS.notices.duplicateCardId(duplicate.path));
-		}
-	}
 }
 
 function sameSibling(a: QueueItem, b: QueueItem): boolean {
 	return a.cardId === b.cardId && a.sub === b.sub;
-}
-
-function groupByPath(cards: NoteCard[]): Map<string, NoteCard[]> {
-	const byPath = new Map<string, NoteCard[]>();
-	for (const card of cards) {
-		const fileCards = byPath.get(card.path);
-		if (fileCards) fileCards.push(card);
-		else byPath.set(card.path, [card]);
-	}
-	return byPath;
 }
 
 function startOfNextLocalDay(now: Date): Date {

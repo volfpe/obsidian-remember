@@ -48,7 +48,7 @@ A cloze card hides marked text in its surrounding context:
 The capital of {{c1::France}} is {{c2::Paris}}.
 ```
 
-Each `cN` is a required, stable sibling number. Clozes are single-line.
+Each `cN` is a required, stable card number. Clozes are single-line.
 
 ## Reviewing
 
@@ -64,5 +64,5 @@ When using Obsidian Sync, enable **Settings → Sync → Selective sync → Sync
 
 Remember stores all data locally in your vault.
 
-- When a review session starts, Remember adds hidden `%%rem:<id>%%` comments to unstamped cards.
+- When Remember opens, it adds hidden `%%rem:<id>%%` comments to unstamped cards in deck notes.
 - Review history is stored in the vault root in `reviews-<device-id>.rememberlog` files. Remember uses these files to calculate each card’s schedule, so do not delete them.

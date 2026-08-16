@@ -44,7 +44,6 @@ export class ReviewView extends ItemView {
 			this.app,
 			settings,
 			fsrs,
-			this.snapshotRepository,
 			() => {
 				this.startingSession = false;
 				return this.showStudy();
@@ -200,11 +199,24 @@ export class ReviewView extends ItemView {
 		}
 		const deck = this.selectedDeck;
 		if (deck === null) {
-			renderDeckChooser(this.body, snapshot, this.settings, (selected) => this.selectDeck(selected));
+			renderDeckChooser(
+				this.body,
+				snapshot,
+				this.settings,
+				(selected) => this.selectDeck(selected),
+				snapshot.loadedAt,
+			);
 			return;
 		}
 		if (this.section === 'study') {
-			renderDeckStudyPage(this.body, snapshot, this.settings, deck, () => void this.startSession());
+			renderDeckStudyPage(
+				this.body,
+				snapshot,
+				this.settings,
+				deck,
+				() => void this.startSession(),
+				snapshot.loadedAt,
+			);
 			return;
 		}
 		if (this.section === 'cards') {
@@ -263,14 +275,15 @@ export class ReviewView extends ItemView {
 		const deck = this.selectedDeck;
 		if (deck === null) return;
 		const session = this.reviewSession;
-		if (!session) return;
+		const snapshot = this.snapshot;
+		if (!session || !snapshot) return;
 		this.startingSession = true;
 		this.refreshGeneration++;
 		this.contentEl.addClass('remember-session-active');
 		this.body.empty();
 		this.body.createEl('p', { cls: 'remember-empty', text: STRINGS.review.preparing });
 		try {
-			await session.start(this.body, deck);
+			await session.start(this.body, deck, snapshot);
 		} catch (error) {
 			console.warn('Remember: could not start review session', error);
 			new Notice(STRINGS.notices.couldNotStartSession(error));

@@ -1,3 +1,4 @@
+import { TFile } from 'obsidian';
 import { App, Notice, WorkspaceLeaf } from 'obsidian-test-mocks/obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS } from '../settings';
@@ -16,6 +17,81 @@ describe('view persistence', () => {
 });
 
 describe('Remember shell', () => {
+	it('stamps cards in every deck when Remember opens', async () => {
+		const mockApp = App.createConfigured__({
+			files: {
+				'language.md': '---\ndeck: Language\n---\nhello::hola',
+				'geography.md': '---\ndeck: Geography\n---\nFrance::Paris',
+				'plain.md': 'outside::deck',
+			},
+		});
+		const app = mockApp.asOriginalType__();
+		const leaf = WorkspaceLeaf.create2__(mockApp).asOriginalType3__();
+		const view = new ReviewView(leaf, { ...DEFAULT_SETTINGS });
+
+		await view.onOpen();
+
+		expect(await app.vault.adapter.read('language.md')).toMatch(
+			/hello::hola %%rem:[0-9a-z]{16}%%/,
+		);
+		expect(await app.vault.adapter.read('geography.md')).toMatch(
+			/France::Paris %%rem:[0-9a-z]{16}%%/,
+		);
+		expect(await app.vault.adapter.read('plain.md')).toBe('outside::deck');
+	});
+
+	it('starts with the same cards shown before a refresh', async () => {
+		const mockApp = App.createConfigured__({
+			files: { 'language.md': '---\ndeck: Language\n---\nhello::hola' },
+		});
+		const app = mockApp.asOriginalType__();
+		const leaf = WorkspaceLeaf.create2__(mockApp).asOriginalType3__();
+		const view = new ReviewView(leaf, { ...DEFAULT_SETTINGS });
+		await view.onOpen();
+		const file = app.vault.getAbstractFileByPath('language.md');
+		expect(file).toBeInstanceOf(TFile);
+		if (!(file instanceof TFile)) throw new Error('language.md is missing');
+		await app.vault.modify(file, `${await app.vault.read(file)}\nbye::adios`);
+
+		(view as unknown as { selectDeck(deck: string): void }).selectDeck('Language');
+		expect(view.contentEl.querySelector('.remember-deck-readiness')?.textContent).toBe(
+			'1 card ready',
+		);
+		view.contentEl.querySelector<HTMLButtonElement>('.remember-start-review')?.click();
+
+		expect(view.contentEl.querySelector('.remember-progress-total')?.textContent).toBe('1');
+	});
+
+	it('includes cards added after opening once Refresh is used', async () => {
+		const mockApp = App.createConfigured__({
+			files: { 'language.md': '---\ndeck: Language\n---\nhello::hola' },
+		});
+		const app = mockApp.asOriginalType__();
+		const leaf = WorkspaceLeaf.create2__(mockApp).asOriginalType3__();
+		const view = new ReviewView(leaf, { ...DEFAULT_SETTINGS });
+		await view.onOpen();
+		const file = app.vault.getAbstractFileByPath('language.md');
+		expect(file).toBeInstanceOf(TFile);
+		if (!(file instanceof TFile)) throw new Error('language.md is missing');
+		await app.vault.modify(file, `${await app.vault.read(file)}\nbye::adios`);
+
+		view.contentEl.querySelector<HTMLButtonElement>('.remember-refresh')?.click();
+		await vi.waitFor(() => {
+			expect(view.contentEl.querySelector<HTMLButtonElement>('.remember-refresh')?.disabled).toBe(
+				false,
+			);
+		});
+		expect(await app.vault.read(file)).toMatch(/bye::adios %%rem:[0-9a-z]{16}%%/);
+
+		(view as unknown as { selectDeck(deck: string): void }).selectDeck('Language');
+		expect(view.contentEl.querySelector('.remember-deck-readiness')?.textContent).toBe(
+			'2 cards ready',
+		);
+		view.contentEl.querySelector<HTMLButtonElement>('.remember-start-review')?.click();
+
+		expect(view.contentEl.querySelector('.remember-progress-total')?.textContent).toBe('2');
+	});
+
 	it('opens Remember settings from the header and keeps Import hidden', async () => {
 		const mockApp = App.createConfigured__();
 		const leaf = WorkspaceLeaf.create2__(mockApp).asOriginalType3__();
