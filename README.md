@@ -1,18 +1,20 @@
 # Remember
 
-A minimal spaced repetition plugin for Obsidian.
+A spaced repetition plugin for Obsidian with FSRS scheduling.
 
-Designed for reliable use across synced devices.
+Built for reliable use across synced devices.
 
 ## Usage
 
-Add a `deck` property to the note:
+Add a `deck` property to every note that contains cards. Open the Command palette (`Cmd/Ctrl+P`), run **Add file property**, name it `deck`, and enter a deck name:
 
 ```markdown
 ---
 deck: lang/spanish
 ---
 ```
+
+Then add cards anywhere in the note using one of the formats below. To review them, click the **Remember: open** icon in the left toolbar or run the **Remember: Open** command.
 
 ### Single-line cards
 
@@ -50,15 +52,19 @@ The capital of {{c1::France}} is {{c2::Paris}}.
 
 Each `cN` is a required, stable card number. Clozes are single-line.
 
-## Reviewing
+### Suspending cards
 
-Click the **Remember: open** button in the left panel to open Remember.
-You can also run the `Remember: Open` command.
+Prefix a card with `{suspend}` to exclude it from reviews without deleting its history:
+
+```markdown
+{suspend} hola::hello
+```
+
+Remove `{suspend}` to resume the card.
 
 ## Multi-device sync
 
 When using Obsidian Sync, enable **Settings → Sync → Selective sync → Sync all other types** on every device.
-
 
 ## Data storage
 
