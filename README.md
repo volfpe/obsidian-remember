@@ -6,21 +6,18 @@ Built for reliable use across synced devices.
 
 ## Usage
 
-Every card is one Markdown note inside the **Remember** folder (configurable in settings). Folders inside it are decks; nested folders are subdecks.
+Every flashcard is a Markdown note in your Remember folder. Use folders and subfolders to organize cards into decks and subdecks.
 
-Create a card with the **Remember: new card** command or  button in the left toolbar. New decks are made by creating folders.
+To create a card, run **Remember: new card** or click its left toolbar button.
 
-To review, run the **Remember: Open** command or click its toolbar icon.
+To review, run the **Remember: Open** command or click its left toolbar icon.
+
+The plugin automatically manages the card's frontmatter. See [Card metadata](#card-metadata) for details.
+
 
 ### Basic cards
 
 ```markdown
----
-remember-id: k2mf9x1a0q7b3c8d
-remember-type: basic
-remember-reverse: false
----
-
 # Front
 
 hola
@@ -30,24 +27,30 @@ hola
 hello
 ```
 
-Set `remember-reverse: true` to also create a card in the reverse direction.
+Enable **Reverse** when creating a card, or set `remember-reverse: true` in its frontmatter, to also create a virtual card in the reverse direction.
 
 ### Cloze cards
 
 A cloze card hides marked text in its surrounding context. The whole note body is the card:
 
 ```markdown
----
-remember-id: k2mf9x1a0q7b3c8e
-remember-type: cloze
----
-
 The capital of ==c1:France== is ==c2:Paris==.
 ```
 
-Each `cN` is a required, stable card number.
+Each `cN` is a required, stable card number. The example above creates two cards:
 
-Use the same number to hide related answers together as a single card. For example, `The capital of France is ==c1:Paris==, and its currency is the ==c1:euro==.` creates one card that hides both highlighted clozes.
+- `c1`: `The capital of […] is Paris.`
+- `c2`: `The capital of France is […].`
+
+Use the same number to hide related answers together as a single card:
+
+```markdown
+The capital of France is ==c1:Paris==, and its currency is the ==c1:euro==.
+```
+
+This creates one card that hides both highlighted clozes:
+
+- `c1`: `The capital of France is […], and its currency is the […].`
 
 ### Suspending cards
 
@@ -55,7 +58,16 @@ Add `remember-suspend: true` to the frontmatter to exclude a card from reviews w
 
 ### Adding existing notes
 
-Create any note into the Remember folder and give it `# Front`/`# Back` sections or a cloze marker. Remember adds the missing frontmatter when it opens.
+You can also create a note directly in the Remember folder and add `# Front`/`# Back` sections or a cloze marker. Remember adds the missing frontmatter when it opens.
+
+## Card metadata
+
+Each card's frontmatter contains:
+
+- `remember-id` — the generated stable card identifier
+- `remember-type` — the card format: `basic` or `cloze`
+- `remember-reverse` — whether a basic card also appears in the reverse direction
+- `remember-suspend` — whether the card is excluded from reviews
 
 ## Multi-device sync
 
@@ -63,4 +75,6 @@ When using Obsidian Sync, enable **Settings → Sync → Selective sync → Sync
 
 ## Data storage
 
-Remember stores all data locally in your vault: cards are plain Markdown notes, and review history lives in `reviews-<device-id>.rememberlog` files in the Remember folder. The schedule is calculated from these files, so do not delete them.
+All data stays local in your vault. Remember makes no network requests.
+
+Review history is saved in `reviews-<device-id>.rememberlog` files in the Remember folder. The schedule is calculated from these files, so do not delete them.
