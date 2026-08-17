@@ -55,6 +55,7 @@ export class AddCardModal extends Modal {
 	private reverseSetting: Setting | null = null;
 	private fields: TextAreaComponent[] = [];
 	private continueButton: ButtonComponent | null = null;
+	private actionButtons: ButtonComponent[] = [];
 	private statusEl: HTMLElement | null = null;
 	private busy = false;
 
@@ -76,12 +77,12 @@ export class AddCardModal extends Modal {
 		this.kind = last.kind;
 		this.reverse = last.reverse;
 
-		new Setting(this.contentEl).setName(STRINGS.addCard.deck).addDropdown((dropdown) => {
+		new Setting(this.contentEl).setName(STRINGS.addCard.deck).setClass('remember-add-card-option').addDropdown((dropdown) => {
 			for (const path of decks) dropdown.addOption(path, deckLabel(path, root));
 			dropdown.setValue(this.deck);
 			dropdown.onChange((value) => (this.deck = value));
 		});
-		new Setting(this.contentEl).setName(STRINGS.addCard.type).addDropdown((dropdown) => {
+		new Setting(this.contentEl).setName(STRINGS.addCard.type).setClass('remember-add-card-option').addDropdown((dropdown) => {
 			dropdown.addOption('basic', STRINGS.addCard.typeBasic);
 			dropdown.addOption('cloze', STRINGS.addCard.typeCloze);
 			dropdown.setValue(this.kind);
@@ -93,6 +94,7 @@ export class AddCardModal extends Modal {
 		this.reverseSetting = new Setting(this.contentEl)
 			.setName(STRINGS.addCard.reverse)
 			.setDesc(STRINGS.addCard.reverseDescription)
+			.setClass('remember-add-card-option')
 			.addToggle((toggle) => {
 				toggle.setValue(this.reverse);
 				toggle.onChange((value) => (this.reverse = value));
@@ -100,19 +102,23 @@ export class AddCardModal extends Modal {
 		this.frontSetting = this.textField(STRINGS.addCard.front, (value) => (this.front = value));
 		this.backSetting = this.textField(STRINGS.addCard.back, (value) => (this.back = value));
 		this.textSetting = this.textField(STRINGS.addCard.text, (value) => (this.body = value));
-		new Setting(this.contentEl)
+		const actions = new Setting(this.contentEl).setClass('remember-add-card-actions');
+		this.statusEl = actions.infoEl.createDiv({ cls: 'remember-add-card-status' });
+		this.statusEl.setAttr('aria-live', 'polite');
+		actions
 			.addButton((button) => {
 				this.continueButton = button;
+				this.actionButtons.push(button);
 				button.setButtonText(STRINGS.addCard.createContinue);
 				button.setTooltip(STRINGS.addCard.createContinueTooltip);
 				button.onClick(() => void this.submit(true));
 			})
 			.addButton((button) => {
+				this.actionButtons.push(button);
 				button.setCta();
 				button.setButtonText(STRINGS.addCard.create);
 				button.onClick(() => void this.submit(false));
 			});
-		this.statusEl = this.contentEl.createDiv({ cls: 'remember-add-card-status' });
 		this.applyKind();
 		window.setTimeout(() => this.focusFirstField(), 0);
 	}
@@ -125,6 +131,7 @@ export class AddCardModal extends Modal {
 		this.reverseSetting = null;
 		this.fields = [];
 		this.continueButton = null;
+		this.actionButtons = [];
 		this.statusEl = null;
 	}
 
@@ -132,7 +139,7 @@ export class AddCardModal extends Modal {
 		const setting = new Setting(this.contentEl).setName(name).setClass('remember-add-card-field');
 		setting.addTextArea((text) => {
 			text.setPlaceholder(STRINGS.addCard.fieldPlaceholder);
-			text.inputEl.rows = 2;
+			text.inputEl.rows = 4;
 			text.onChange((value) => {
 				store(value);
 				this.updateContinueState();
@@ -157,9 +164,8 @@ export class AddCardModal extends Modal {
 	 */
 	private updateContinueState(): void {
 		const spec = this.buildSpec('preview');
-		const complete =
-			parseCardNote(cardNoteContent(spec), { type: this.kind, reverse: this.reverse }).siblings.length > 0;
-		this.continueButton?.setDisabled(!complete);
+		const complete = canCreateAndContinue(spec);
+		this.continueButton?.setDisabled(this.busy || !complete);
 	}
 
 	private focusFirstField(): void {
@@ -170,6 +176,7 @@ export class AddCardModal extends Modal {
 	private async submit(continueAdding: boolean): Promise<void> {
 		if (this.busy) return;
 		this.busy = true;
+		for (const button of this.actionButtons) button.setDisabled(true);
 		try {
 			const created = await this.createCard();
 			this.app.saveLocalStorage(LAST_CHOICES_KEY, {
@@ -191,6 +198,8 @@ export class AddCardModal extends Modal {
 			new Notice(STRINGS.notices.couldNotCreateCard(error));
 		} finally {
 			this.busy = false;
+			for (const button of this.actionButtons) button.setDisabled(false);
+			this.updateContinueState();
 		}
 	}
 
@@ -233,6 +242,21 @@ export class AddCardModal extends Modal {
 		else leaf.view.editor.setSelection(from, { line: cursor.line, ch: cursor.toCh });
 		leaf.view.editor.focus();
 	}
+}
+
+/** Batch creation requires user-authored, parseable content; generated placeholders do not count. */
+export function canCreateAndContinue(spec: NewCardSpec): boolean {
+	const hasContent =
+		spec.kind === 'basic'
+			? (spec.front?.trim() ?? '') !== '' && (spec.back?.trim() ?? '') !== ''
+			: (spec.body?.trim() ?? '') !== '';
+	if (!hasContent) return false;
+	return (
+		parseCardNote(cardNoteContent(spec), {
+			'remember-type': spec.kind,
+			'remember-reverse': spec.reverse === true,
+		}).siblings.length > 0
+	);
 }
 
 /** The root folder and every folder below it, root first, then by path. */

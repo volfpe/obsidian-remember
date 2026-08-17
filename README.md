@@ -27,7 +27,7 @@ hola
 hello
 ```
 
-Enable **Reverse** when creating a card, or set `remember-reverse: true` in its frontmatter, to also create a virtual card in the reverse direction.
+Enable **Reverse** when creating a card (or set `remember-reverse: true` in its frontmatter) to also create a virtual card in the reverse direction.
 
 ### Cloze cards
 

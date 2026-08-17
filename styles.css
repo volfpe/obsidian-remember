@@ -41,27 +41,104 @@ button.remember-back-to-decks.is-hidden {
 	display: none;
 }
 
+.remember-add-card-modal {
+	width: min(720px, calc(100vw - 32px));
+}
+
+.is-mobile .remember-add-card-modal {
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	max-width: 100%;
+	max-height: 100%;
+	margin: 0;
+	padding: calc(var(--safe-area-inset-top) + var(--size-4-3))
+		calc(var(--safe-area-inset-right) + var(--size-4-3))
+		calc(var(--safe-area-inset-bottom) + var(--size-4-3))
+		calc(var(--safe-area-inset-left) + var(--size-4-3));
+	border-radius: 0;
+}
+
 .remember-add-card-modal .setting-item {
 	align-items: center;
+}
+
+.remember-add-card-modal .remember-add-card-option {
+	padding-block: 10px;
 }
 
 .remember-add-card-modal .setting-item.is-hidden {
 	display: none;
 }
 
+.remember-add-card-modal .remember-add-card-field {
+	align-items: stretch;
+	gap: 8px;
+	padding-block: 16px;
+	flex-direction: column;
+}
+
+.remember-add-card-modal .remember-add-card-field .setting-item-info,
 .remember-add-card-modal .remember-add-card-field .setting-item-control {
-	flex: 1;
+	width: 100%;
+	flex: none;
+}
+
+.remember-add-card-modal .remember-add-card-field .setting-item-name {
+	font-weight: var(--font-semibold);
 }
 
 .remember-add-card-modal .remember-add-card-field textarea {
 	width: 100%;
+	min-height: 96px;
+	max-height: 40vh;
+	padding: 10px 12px;
+	line-height: 1.5;
 	resize: vertical;
 }
 
 .remember-add-card-status {
-	min-height: 1.5em;
+	min-width: 0;
+	overflow: hidden;
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.remember-add-card-modal .remember-add-card-actions {
+	gap: 12px;
+	padding-top: 12px;
+	border-top: 0;
+}
+
+.remember-add-card-modal .remember-add-card-actions .setting-item-info {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.remember-add-card-modal .remember-add-card-actions .setting-item-control {
+	flex: 0 0 auto;
+	justify-content: flex-end;
+}
+
+@media (width <= 480px) {
+	.remember-add-card-modal .remember-add-card-option {
+		padding-block: 8px;
+	}
+
+	.remember-add-card-modal .remember-add-card-field {
+		padding-block: 12px;
+	}
+
+	.remember-add-card-modal .remember-add-card-field textarea {
+		min-height: 72px;
+	}
+
+	.remember-add-card-modal .remember-add-card-actions {
+		gap: 8px;
+		padding-top: 8px;
+	}
 }
 
 button.remember-refresh {
