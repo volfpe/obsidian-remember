@@ -1,6 +1,6 @@
 # Remember
 
-A spaced repetition plugin for Obsidian with FSRS scheduling.
+A Markdown-native spaced repetition plugin for Obsidian with FSRS scheduling.
 
 Built for reliable use across synced devices.
 
