@@ -42,10 +42,12 @@ remember-id: k2mf9x1a0q7b3c8e
 remember-type: cloze
 ---
 
-The capital of {{c1::France}} is {{c2::Paris}}.
+The capital of ==c1:France== is ==c2:Paris==.
 ```
 
 Each `cN` is a required, stable card number.
+
+Use the same number to hide related answers together as a single card. For example, `The capital of France is ==c1:Paris==, and its currency is the ==c1:euro==.` creates one card that hides both highlighted clozes.
 
 ### Suspending cards
 

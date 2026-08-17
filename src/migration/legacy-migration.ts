@@ -6,8 +6,9 @@ import { Modal, Notice, TFile, type App } from 'obsidian';
 import { ID_PROPERTY } from '../core/card-note';
 import { newCardId } from '../core/id';
 import { cardFileBaseName, cardNoteContent, slugSource, type NewCardSpec } from '../core/new-card';
-import type { LegacyMigrationPort } from '../ui/review-view';
 import { availablePath, ensureFolder, parentPath } from '../vault-folders';
+import type { MigrationStep } from './card-migrations';
+import { migrateLegacyClozeSyntax } from './cloze-syntax-migration';
 import { clozeSource, parseCards, stripLegacyTokens, type ParsedCard } from './legacy-parser';
 
 const LEGACY_TOKEN = '%%rem:';
@@ -27,7 +28,7 @@ const MIGRATION_STRINGS = {
 	failed: (error: unknown) => `Remember: migration failed — ${String(error)}. Run "Remember: Open" to try again.`,
 };
 
-export class LegacyMigration implements LegacyMigrationPort {
+export class LegacyMigration implements MigrationStep {
 	constructor(
 		private app: App,
 		private rootFolder: () => string,
@@ -46,6 +47,10 @@ export class LegacyMigration implements LegacyMigrationPort {
 			}
 		}
 		return false;
+	}
+
+	hasPending(): Promise<boolean> {
+		return this.hasLegacyCards();
 	}
 
 	offer(onMigrated: () => void): void {
@@ -160,7 +165,12 @@ export class LegacyMigration implements LegacyMigrationPort {
 /** A legacy parsed card as a card-note spec. Sibling numbering is unchanged, so history follows the id. */
 export function legacyCardSpec(card: ParsedCard, id: string, noteText: string): NewCardSpec {
 	if (card.kind === 'cloze') {
-		return { id, kind: 'cloze', suspended: card.suspended, body: clozeSource(noteText, card.line) };
+		return {
+			id,
+			kind: 'cloze',
+			suspended: card.suspended,
+			body: migrateLegacyClozeSyntax(clozeSource(noteText, card.line)),
+		};
 	}
 	return {
 		id,

@@ -24,7 +24,7 @@ describe('Remember shell', () => {
 		const mockApp = App.createConfigured__({
 			files: {
 				'Remember/Language/hola.md': cardNote('hola', 'hello'),
-				'Remember/geography.md': 'The capital of {{c1::France}} is {{c2::Paris}}.',
+				'Remember/geography.md': 'The capital of ==c1:France== is ==c2:Paris==.',
 				'Remember/inbox.md': 'just some prose',
 				'outside.md': cardNote('outside', 'the folder'),
 			},
@@ -91,18 +91,17 @@ describe('Remember shell', () => {
 		expect(view.contentEl.querySelector('.remember-progress-total')?.textContent).toBe('2');
 	});
 
-	it('offers the legacy migration when legacy cards exist', async () => {
+	it('offers pending card migrations when the view opens', async () => {
 		const mockApp = App.createConfigured__();
 		const leaf = WorkspaceLeaf.create2__(mockApp).asOriginalType3__();
 		const migration = {
-			hasLegacyCards: vi.fn(async () => true),
-			offer: vi.fn(),
+			offerPending: vi.fn(async () => undefined),
 		};
 		const view = new ReviewView(leaf, { ...DEFAULT_SETTINGS }, () => undefined, migration);
 
 		await view.onOpen();
 		await vi.waitFor(() => {
-			expect(migration.offer).toHaveBeenCalledOnce();
+			expect(migration.offerPending).toHaveBeenCalledOnce();
 		});
 	});
 

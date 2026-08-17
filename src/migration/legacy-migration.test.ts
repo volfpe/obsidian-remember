@@ -46,12 +46,12 @@ describe('legacy card specs', () => {
 			id: 'cccccccccccccccc',
 			kind: 'cloze',
 			suspended: false,
-			body: 'The capital is {{c1::Paris}}.',
+			body: 'The capital is ==c1:Paris==.',
 		});
 	});
 
 	it('derives readable file names and folder paths', () => {
-		expect(slugSource({ id: 'x', kind: 'cloze', body: 'The {{c1::answer}} is here.' })).toBe('The answer is here.');
+		expect(slugSource({ id: 'x', kind: 'cloze', body: 'The ==c1:answer== is here.' })).toBe('The answer is here.');
 		expect(slugSource({ id: 'x', kind: 'basic', front: '(noun)\n**something**' })).toBe('(noun) something');
 		expect(deckFolderPath('lang/spanish')).toBe('lang/spanish');
 		expect(deckFolderPath('a:b/ c ')).toBe('a b/c');
@@ -111,7 +111,7 @@ describe('migration', () => {
 		expect(hola).toContain('hola');
 		const cloze = await app.vault.adapter.read(`${root}/lang/spanish/The capital is Paris.md`);
 		expect(cloze).toContain('remember-id: cccccccccccccccc');
-		expect(cloze).toContain('The capital is {{c1::Paris}}.');
+		expect(cloze).toContain('The capital is ==c1:Paris==.');
 		const unstamped = await app.vault.adapter.read(`${root}/lang/spanish/unstamped.md`);
 		expect(unstamped).toMatch(/remember-id: [0-9a-z]{16}/);
 

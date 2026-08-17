@@ -11,7 +11,7 @@ import {
 } from './card-note';
 
 export const CLOZE_PLACEHOLDER_ANSWER = 'answer';
-export const CLOZE_PLACEHOLDER = `{{c1::${CLOZE_PLACEHOLDER_ANSWER}}}`;
+export const CLOZE_PLACEHOLDER = `==c1:${CLOZE_PLACEHOLDER_ANSWER}==`;
 
 export interface NewCardSpec {
 	id: string;
@@ -73,7 +73,7 @@ export function cardFileBaseName(name: string, fallbackId: string): string {
 export function slugSource(spec: NewCardSpec): string {
 	const text = spec.kind === 'cloze' ? (spec.body ?? '') : (spec.front ?? '');
 	return text
-		.replace(/\{\{c[0-9]+::(.*?)\}\}/g, '$1')
+		.replace(/==c[0-9]+:(.*?)==/g, '$1')
 		.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
 		.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
 		.replace(/[*_~`>|]/g, '')
@@ -95,7 +95,7 @@ export function newCardCursor(content: string, spec: NewCardSpec): CursorTarget 
 		if (spec.body !== undefined) return endOfContent(lines);
 		const line = lines.findIndex((text) => text.includes(CLOZE_PLACEHOLDER));
 		if (line < 0) return null;
-		const ch = lines[line].indexOf(CLOZE_PLACEHOLDER) + '{{c1::'.length;
+		const ch = lines[line].indexOf(CLOZE_PLACEHOLDER) + '==c1:'.length;
 		return { line, ch, toCh: ch + CLOZE_PLACEHOLDER_ANSWER.length };
 	}
 	const front = spec.front ?? '';

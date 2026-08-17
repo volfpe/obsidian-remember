@@ -35,7 +35,7 @@ describe('cardNoteContent', () => {
 
 		expect(content).toContain(CLOZE_PLACEHOLDER);
 		expect(content).not.toContain('reverse');
-		const withBody = cardNoteContent({ id: 'card1', kind: 'cloze', body: 'x is {{c1::y}}', suspended: true });
+		const withBody = cardNoteContent({ id: 'card1', kind: 'cloze', body: 'x is ==c1:y==', suspended: true });
 		expect(withBody).toContain('remember-suspend: true');
 		expect(parseCardNote(withBody, { 'remember-id': 'card1', 'remember-type': 'cloze' }).siblings).toHaveLength(1);
 	});

@@ -1,6 +1,6 @@
 // Pure card-note text + frontmatter -> siblings. No Obsidian imports.
 // A card note is one Markdown file: frontmatter metadata plus a body that is
-// either a basic card (# Front / # Back sections) or a cloze card ({{cN::…}} markers).
+// either a basic card (# Front / # Back sections) or a cloze card (==cN:…== highlights).
 
 import { maskMarkdownCode, type MarkdownLine } from './markdown-code';
 
@@ -42,8 +42,8 @@ export const FRONT_HEADING = '# Front';
 export const BACK_HEADING = '# Back';
 
 const HEADING = /^#[ \t]+(front|back)[ \t]*$/i;
-const CLOZE = /\{\{c([1-9][0-9]*)::(.*?)\}\}/g;
-const CLOZE_LIKE = /\{\{c[0-9]*::/i;
+const CLOZE = /==c([1-9][0-9]*):(.*?)==/g;
+const CLOZE_LIKE = /==c[0-9]*:/i;
 
 interface ClozeMarker {
 	number: number;
@@ -128,11 +128,11 @@ function parseClozeBody(
 		CLOZE.lastIndex = 0;
 		for (let match = CLOZE.exec(searchable); match !== null; match = CLOZE.exec(searchable)) {
 			const number = Number(match[1]);
-			const answerStart = match.index + `{{c${match[1]}::`.length;
+			const answerStart = match.index + `==c${match[1]}:`.length;
 			const answerEnd = match.index + match[0].length - 2;
 			const answer = raw.slice(answerStart, answerEnd);
 			masked = masked.slice(0, match.index) + ' '.repeat(match[0].length) + masked.slice(match.index + match[0].length);
-			if (!Number.isSafeInteger(number) || answer.trim() === '' || answer.includes('{{')) {
+			if (!Number.isSafeInteger(number) || answer.trim() === '') {
 				malformed = true;
 				continue;
 			}

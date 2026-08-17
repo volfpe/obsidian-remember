@@ -78,7 +78,7 @@ describe('basic card notes', () => {
 
 describe('cloze card notes', () => {
 	it('creates one sibling per distinct number across the whole body', () => {
-		const text = 'The capital of {{c1::France}}\nis {{c2::Paris}}.';
+		const text = 'The capital of ==c1:France==\nis ==c2:Paris==.';
 		const card = parseCardNote(text, { 'remember-id': 'card1', 'remember-type': 'cloze' });
 
 		expect(card.kind).toBe('cloze');
@@ -89,7 +89,7 @@ describe('cloze card notes', () => {
 	});
 
 	it('hides repeated numbers together and permits gaps', () => {
-		const card = parseCardNote('{{c1::NaCl}} is {{c1::salt}}, with {{c5::chloride}}.', { 'remember-type': 'cloze' });
+		const card = parseCardNote('==c1:NaCl== is ==c1:salt==, with ==c5:chloride==.', { 'remember-type': 'cloze' });
 
 		expect(card.siblings.map(({ sub, front }) => ({ sub, front }))).toEqual([
 			{ sub: 2, front: '[…] is […], with chloride.' },
@@ -98,17 +98,18 @@ describe('cloze card notes', () => {
 	});
 
 	it('ignores cloze syntax inside code but keeps code answers', () => {
-		expect(parseCardNote('Use `{{c1::x}}` here', { 'remember-type': 'cloze' }).siblings).toEqual([]);
-		const card = parseCardNote('Call {{c1::`console.log()`}} to print.', { 'remember-type': 'cloze' });
+		expect(parseCardNote('Use `==c1:x==` here', { 'remember-type': 'cloze' }).siblings).toEqual([]);
+		const card = parseCardNote('Call ==c1:`console.log()`== to print.', { 'remember-type': 'cloze' });
 		expect(card.siblings[0].back).toBe('Call `console.log()` to print.');
 	});
 
 	it('produces no siblings for missing or malformed clozes', () => {
 		expect(parseCardNote('prose without clozes', { 'remember-type': 'cloze' }).siblings).toEqual([]);
-		expect(parseCardNote('Empty {{c1::}}', { 'remember-type': 'cloze' }).siblings).toEqual([]);
-		expect(parseCardNote('Implicit {{c::answer}}', { 'remember-type': 'cloze' }).siblings).toEqual([]);
-		expect(parseCardNote('Mixed {{c1::ok}} and {{c::broken}}', { 'remember-type': 'cloze' }).siblings).toEqual([]);
-		expect(parseCardNote('Zero {{c0::answer}}', { 'remember-type': 'cloze' }).siblings).toEqual([]);
+		expect(parseCardNote('Empty ==c1:==', { 'remember-type': 'cloze' }).siblings).toEqual([]);
+		expect(parseCardNote('Implicit ==c:answer==', { 'remember-type': 'cloze' }).siblings).toEqual([]);
+		expect(parseCardNote('Mixed ==c1:ok== and ==c:broken==', { 'remember-type': 'cloze' }).siblings).toEqual([]);
+		expect(parseCardNote('Zero ==c0:answer==', { 'remember-type': 'cloze' }).siblings).toEqual([]);
+		expect(parseCardNote('Unfinished ==c1:answer', { 'remember-type': 'cloze' }).siblings).toEqual([]);
 	});
 });
 
@@ -124,7 +125,7 @@ describe('frontmatter metadata', () => {
 
 	it('infers the kind when frontmatter has no valid type', () => {
 		expect(parseCardNote(basicNote, {})).toMatchObject({ kind: 'basic', declaredKind: null });
-		expect(parseCardNote('x {{c1::y}}', undefined)).toMatchObject({ kind: 'cloze', declaredKind: null });
+		expect(parseCardNote('x ==c1:y==', undefined)).toMatchObject({ kind: 'cloze', declaredKind: null });
 		expect(parseCardNote(basicNote, { 'remember-type': 'weird' }).declaredKind).toBeNull();
 		expect(parseCardNote('plain prose note', {})).toMatchObject({
 			kind: null,
@@ -133,7 +134,7 @@ describe('frontmatter metadata', () => {
 	});
 
 	it('lets a declared type win over body inference', () => {
-		const card = parseCardNote('body with {{c1::cloze}}', { 'remember-type': 'basic' });
+		const card = parseCardNote('body with ==c1:cloze==', { 'remember-type': 'basic' });
 		expect(card).toMatchObject({ kind: 'basic', siblings: [] });
 	});
 });

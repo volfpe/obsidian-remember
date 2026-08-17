@@ -1,8 +1,10 @@
 import { Plugin, type App } from 'obsidian';
 import { STRINGS } from './i18n';
 import { cleanOwnConflictCopies } from './log';
-// Legacy inline-card support; delete these two imports with src/migration/.
+// One-time card-format migrations; delete these imports with src/migration/.
 import { hideTokens } from './migration/hide-tokens';
+import { CardMigrations } from './migration/card-migrations';
+import { ClozeSyntaxMigration } from './migration/cloze-syntax-migration';
 import { LegacyMigration } from './migration/legacy-migration';
 import { parseSettings, RememberSettingTab, type RememberSettings } from './settings';
 import { AddCardModal } from './ui/add-card-modal';
@@ -21,13 +23,17 @@ export default class RememberPlugin extends Plugin {
 			() => this.settings.rootFolder,
 			() => this.loadData(),
 		);
+		const cardMigrations = new CardMigrations([
+			legacyMigration,
+			new ClozeSyntaxMigration(this.app, () => this.settings.rootFolder),
+		]);
 		this.rememberViewHost = new TransientSingletonViewHost(
 			this.app.workspace,
 			REMEMBER_VIEW_DEFINITION,
 		);
 		this.rememberViewHost.install(
 			this,
-			(leaf) => new ReviewView(leaf, this.settings, () => this.openSettings(), legacyMigration),
+			(leaf) => new ReviewView(leaf, this.settings, () => this.openSettings(), cardMigrations),
 		);
 		this.addRibbonIcon(REMEMBER_VIEW_DEFINITION.icon, STRINGS.plugin.openRibbon, () => void this.openReview());
 		this.addRibbonIcon('copy-plus', STRINGS.plugin.newCardRibbon, () => this.openAddCard());

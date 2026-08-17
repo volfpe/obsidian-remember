@@ -14,7 +14,7 @@ Folders under the root folder are decks. Nested folders are subdecks. Notes dire
 
 Card metadata lives in frontmatter: `remember-id`, `remember-type` (`basic` or `cloze`), `remember-reverse`, and `remember-suspend`. The prefix keeps the properties out of the way of user metadata, because Obsidian properties share one vault-wide namespace.
 
-A basic card has its question under `# Front` and its answer under `# Back`. A cloze card body is plain Markdown with `{{cN::answer}}` markers.
+A basic card has its question under `# Front` and its answer under `# Back`. A cloze card body is plain Markdown with `==cN:answer==` highlights.
 
 Review logs live in the root folder.
 

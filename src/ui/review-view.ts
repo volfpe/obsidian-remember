@@ -35,7 +35,7 @@ export class ReviewView extends ItemView {
 		leaf: WorkspaceLeaf,
 		private settings: RememberSettings,
 		private openSettings: () => void = () => undefined,
-		private legacyMigration: LegacyMigrationPort | null = null,
+		private cardMigrations: CardMigrationsPort | null = null,
 	) {
 		super(leaf);
 		this.navigation = false;
@@ -104,18 +104,17 @@ export class ReviewView extends ItemView {
 		this.renderNavigation();
 		this.renderCurrentSection();
 		await this.refreshData();
-		void this.offerLegacyMigration();
+		void this.offerCardMigrations();
 	}
 
-	/** Legacy inline-card migration; the hook disappears with src/migration/. */
-	private async offerLegacyMigration(): Promise<void> {
-		const migration = this.legacyMigration;
-		if (!migration) return;
+	/** One-time format migrations; the hook disappears with src/migration/. */
+	private async offerCardMigrations(): Promise<void> {
+		const migrations = this.cardMigrations;
+		if (!migrations) return;
 		try {
-			if (!(await migration.hasLegacyCards())) return;
-			migration.offer(() => void this.refreshData(true));
+			await migrations.offerPending(() => void this.refreshData(true));
 		} catch (error) {
-			console.warn('Remember: legacy card check failed', error);
+			console.warn('Remember: card migration check failed', error);
 		}
 	}
 
@@ -323,9 +322,8 @@ export class ReviewView extends ItemView {
 	}
 }
 
-/** Implemented by src/migration/ for the one-time legacy inline-card migration. */
-export interface LegacyMigrationPort {
-	hasLegacyCards(): Promise<boolean>;
-	/** Shows the migration prompt; calls onMigrated after a successful migration. */
-	offer(onMigrated: () => void): void;
+/** Implemented by src/migration/ for one-time card-format migrations. */
+export interface CardMigrationsPort {
+	/** Shows the first pending prompt and continues to the next after a successful migration. */
+	offerPending(onMigrated: () => void): Promise<void>;
 }
