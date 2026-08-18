@@ -42,6 +42,18 @@ describe('foldEvents', () => {
 		expect(states.get(siblingKey('card1', 0))!.reps).toBe(1);
 		expect(states.get(siblingKey('card1', 1))!.reps).toBe(1);
 	});
+
+	it('can replay each rating with the retention recorded by that review', () => {
+		const events = [
+			{ ...event('2026-01-01T10:00:00.000Z', Rating.Good), dr: 0.8 },
+			{ ...event('2026-01-10T10:00:00.000Z', Rating.Easy), dr: 0.95 },
+		];
+		let expected = applyRating(makeFsrs(0.8), null, new Date(events[0].t), events[0].r);
+		expected = applyRating(makeFsrs(0.95), expected, new Date(events[1].t), events[1].r);
+
+		expect(foldEvents(f, events, 'review').get(siblingKey('card1', 0))).toEqual(expected);
+		expect(foldEvents(f, events, 'current').get(siblingKey('card1', 0))).not.toEqual(expected);
+	});
 });
 
 describe('previewDue', () => {

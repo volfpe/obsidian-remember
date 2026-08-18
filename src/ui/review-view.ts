@@ -1,6 +1,5 @@
 import { ItemView, Notice, setIcon, setTooltip, type IconName, type WorkspaceLeaf } from 'obsidian';
 import { isDescendantDeck } from '../core/queue';
-import { makeFsrs } from '../core/scheduler';
 import { STRINGS } from '../i18n';
 import type { RememberSettings } from '../settings';
 import { CardsPage } from './cards/cards-page';
@@ -39,12 +38,10 @@ export class ReviewView extends ItemView {
 	) {
 		super(leaf);
 		this.navigation = false;
-		const fsrs = makeFsrs(settings.desiredRetention);
-		this.snapshotRepository = new RememberSnapshotRepository(this.app, settings, fsrs);
+		this.snapshotRepository = new RememberSnapshotRepository(this.app, settings);
 		this.reviewSession = new ReviewSession(
 			this.app,
 			settings,
-			fsrs,
 			() => {
 				this.startingSession = false;
 				return this.showStudy();

@@ -5,12 +5,16 @@ import type { CardKind, ParsedSibling } from './card-note';
 import type { BuryEvent, ReviewEvent } from './events';
 import { siblingKey } from './scheduler';
 
-/** A rated sibling may re-enter the current session within this learn-ahead limit. */
-export const LEARN_AHEAD_LIMIT_MS = 10 * 60 * 1000;
-
 /** Whether a scheduled sibling is close enough to return in the current session. */
-export function returnsToCurrentSession(due: Date, now: Date): boolean {
-	return due.getTime() - now.getTime() <= LEARN_AHEAD_LIMIT_MS;
+export function returnsToCurrentSession(
+	due: Date,
+	now: Date,
+	learnAheadMinutes: number | null = 10,
+): boolean {
+	return (
+		learnAheadMinutes !== null &&
+		due.getTime() - now.getTime() <= learnAheadMinutes * 60 * 1000
+	);
 }
 
 /** A complete parsed card note located in the vault. */

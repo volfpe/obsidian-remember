@@ -1,19 +1,17 @@
-# ADR 0007: Version events and record desired retention
+# ADR 0007: Record desired retention
 
 ## Context
 
-Remember rebuilds each card's FSRS state from its review events. It uses the current scheduler and desired retention. If either one changes, the same events may produce different due dates.
+Desired retention affects a card's due date. Users may or may not want a new value to change cards they already reviewed.
 
 ## Decision
 
-Every log event must have a version in `v`. Version 1 defines the event fields, their meaning, and how Remember replays them.
+Store a version in every event as `v`.
 
-Every review event must store the desired retention used for that review in `dr`.
+Store the desired retention in every review event as `dr`.
 
-Version 1 does not use `dr` during replay. It replays all reviews with the current desired retention. The stored value is only information that a future version may use.
+Add a setting that controls whether changing desired retention reschedules existing cards. Keep it enabled by default.
 
 ## Consequences
 
-Changing desired retention rebuilds the schedule and may change due dates immediately.
-
-Future versions may use `dr`.
+When enabled, a new retention value changes existing schedules. When disabled, it applies only to future reviews.

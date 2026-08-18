@@ -6,7 +6,7 @@ A rating can schedule a card a few minutes into the future.
 
 ## Decision
 
-Keep a rated card in the current queue when its next due time is within ten minutes.
+Keep a rated card in the current queue when its next due time is within the configured limit.
 
 Order it by its due time behind cards that are already available. If it reaches the front before it is due, show it early instead of waiting.
 
@@ -14,4 +14,4 @@ Order it by its due time behind cards that are already available. If it reaches 
 
 Sessions continue without timers or a waiting screen.
 
-Cards scheduled more than ten minutes ahead leave the session and become available when due.
+Cards outside the configured limit leave the session and become available when due.

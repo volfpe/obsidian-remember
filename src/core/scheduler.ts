@@ -12,15 +12,27 @@ export function siblingKey(cardId: string, sub: number): string {
 	return `${cardId}#${sub}`;
 }
 
+export type RetentionReplayMode = 'current' | 'review';
+
 /** Replays every sibling's events in timestamp order. Elapsed time comes from the timestamps. */
-export function foldEvents(f: FSRS, events: ReviewEvent[]): Map<string, FsrsCard> {
+export function foldEvents(
+	f: FSRS,
+	events: ReviewEvent[],
+	retentionReplay: RetentionReplayMode = 'current',
+): Map<string, FsrsCard> {
 	const states = new Map<string, FsrsCard>();
+	const schedulers = new Map<number, FSRS>([[f.parameters.request_retention, f]]);
 	const sorted = [...events].sort((a, b) =>
 		a.t < b.t ? -1 : a.t > b.t ? 1 : a.i < b.i ? -1 : a.i > b.i ? 1 : 0,
 	);
 	for (const event of sorted) {
 		const key = siblingKey(event.c, event.s);
-		states.set(key, applyRating(f, states.get(key) ?? null, new Date(event.t), event.r));
+		let scheduler = f;
+		if (retentionReplay === 'review') {
+			scheduler = schedulers.get(event.dr) ?? makeFsrs(event.dr);
+			schedulers.set(event.dr, scheduler);
+		}
+		states.set(key, applyRating(scheduler, states.get(key) ?? null, new Date(event.t), event.r));
 	}
 	return states;
 }

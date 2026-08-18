@@ -9,6 +9,12 @@ export const STRINGS = {
 		newCardRibbon: 'Remember: new card',
 	},
 	settings: {
+		groups: {
+			general: 'General',
+			scheduling: 'Scheduling',
+			dailyLimits: 'Daily limits',
+			reviewSession: 'Review session',
+		},
 		rootFolderName: 'Remember folder',
 		rootFolderDescription:
 			'Folder that holds your cards and review logs. ' +
@@ -24,7 +30,17 @@ export const STRINGS = {
 			'Maximum number of never-reviewed cards introduced from the selected deck each day.',
 		newCardsValidation: 'Enter a whole number from 0 to 9999.',
 		desiredRetentionName: 'Desired retention',
-		desiredRetentionDescription: 'Fsrs target recall probability. Higher means shorter intervals.',
+		desiredRetentionDescription: 'FSRS target recall probability. Higher means shorter intervals.',
+		rescheduleOnRetentionChangeName: 'Reschedule existing cards',
+		rescheduleOnRetentionChangeDescription:
+			'When desired retention changes, update the schedules of cards you have already reviewed. Turn this off to apply the new retention only to future reviews.',
+		learnAheadName: 'Learn ahead',
+		learnAheadDescription:
+			'Keep cards with a short delay in the current session and show them early after other available cards.',
+		learnAheadMinutesName: 'Learn ahead limit',
+		learnAheadMinutesDescription:
+			'Maximum delay, in minutes, for a card to return in the current session.',
+		learnAheadMinutesValidation: 'Enter a whole number from 1 to 1440.',
 	},
 	review: {
 		noCards: 'No cards found. Create one with the "Remember: New card" button or command.',

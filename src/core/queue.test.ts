@@ -67,6 +67,13 @@ describe('returnsToCurrentSession', () => {
 		expect(returnsToCurrentSession(new Date(now.getTime() + 10 * 60 * 1000), now)).toBe(true);
 		expect(returnsToCurrentSession(new Date(now.getTime() + 10 * 60 * 1000 + 1), now)).toBe(false);
 	});
+
+	it('supports a custom limit and a disabled state', () => {
+		const due = new Date(now.getTime() + 6 * 60 * 1000);
+		expect(returnsToCurrentSession(due, now, 5)).toBe(false);
+		expect(returnsToCurrentSession(due, now, 6)).toBe(true);
+		expect(returnsToCurrentSession(due, now, null)).toBe(false);
+	});
 });
 
 describe('dedupeById', () => {

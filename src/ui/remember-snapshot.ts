@@ -1,5 +1,5 @@
 import type { App, TFile } from 'obsidian';
-import type { Card as FsrsCard, FSRS } from 'ts-fsrs';
+import type { Card as FsrsCard } from 'ts-fsrs';
 import { readCardEvents } from '../log';
 import {
 	ID_PROPERTY,
@@ -12,7 +12,7 @@ import {
 import type { BuryEvent, ReviewEvent } from '../core/events';
 import { newCardId } from '../core/id';
 import { selectCards, type NoteCard } from '../core/queue';
-import { foldEvents } from '../core/scheduler';
+import { foldEvents, makeFsrs } from '../core/scheduler';
 import type { RememberSettings } from '../settings';
 import { parentPath } from '../vault-folders';
 
@@ -46,7 +46,6 @@ export class RememberSnapshotRepository {
 	constructor(
 		private app: App,
 		private settings: RememberSettings,
-		private fsrs: FSRS,
 	) {}
 
 	async load(): Promise<RememberSnapshot> {
@@ -57,12 +56,17 @@ export class RememberSnapshotRepository {
 		const events = cardEvents.filter((event): event is ReviewEvent => event.k === 'r');
 		const buries = cardEvents.filter((event): event is BuryEvent => event.k === 'b');
 		const selection = selectCards(cards);
+		const fsrs = makeFsrs(this.settings.desiredRetention);
 		return {
 			loadedAt: new Date(),
 			cards: selection.kept,
 			events,
 			buries,
-			states: foldEvents(this.fsrs, events),
+			states: foldEvents(
+				fsrs,
+				events,
+				this.settings.rescheduleOnRetentionChange ? 'current' : 'review',
+			),
 			issues: {
 				duplicates: selection.dropped,
 			},

@@ -2,8 +2,8 @@ import { Rating, type Grade } from 'ts-fsrs';
 import { App } from 'obsidian-test-mocks/obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueueItem } from '../core/queue';
-import { makeFsrs } from '../core/scheduler';
 import { DEFAULT_SETTINGS } from '../settings';
+import type { RememberSettings } from '../settings';
 import { ReviewSession } from './review-session';
 
 interface ReviewSessionHarness {
@@ -45,6 +45,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 function makeHarness(): {
 	app: ReturnType<App['asOriginalType__']>;
 	finished: ReturnType<typeof vi.fn>;
+	settings: RememberSettings;
 	session: ReviewSessionHarness;
 } {
 	const noteContent = ['---', 'remember-id: first', 'remember-type: basic', '---', '', '# Front', '', 'q', '', '# Back', '', 'a', ''].join('\n');
@@ -52,21 +53,33 @@ function makeHarness(): {
 	mockApp.saveLocalStorage('remember-device-id', 'device0000001');
 	const app = mockApp.asOriginalType__();
 	const settings = { ...DEFAULT_SETTINGS };
-	const fsrs = makeFsrs(settings.desiredRetention);
 	const finished = vi.fn(async () => undefined);
-	const actual = new ReviewSession(app, settings, fsrs, finished);
+	const actual = new ReviewSession(app, settings, finished);
 	actual.load();
 	const session = actual as unknown as ReviewSessionHarness;
 	session.container = createDiv();
 	session.current = item('first');
 	session.queue = [item('second')];
 	session.phase = 'answer';
-	return { app, finished, session };
+	return { app, finished, settings, session };
 }
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('rating durability', () => {
+	it('records the current retention after settings change', async () => {
+		const { app, settings, session } = makeHarness();
+		settings.desiredRetention = 0.95;
+
+		await session.rate(Rating.Easy);
+
+		const [event] = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		expect(event.dr).toBe(0.95);
+	});
+
 	it('does not advance when appending the rating fails', async () => {
 		const { app, session } = makeHarness();
 		vi.spyOn(app.vault.adapter, 'append').mockRejectedValue(new Error('disk full'));
@@ -102,6 +115,38 @@ describe('rating durability', () => {
 });
 
 describe('session progress', () => {
+	it('returns a short-delay card behind the available queue by default', async () => {
+		const { session } = makeHarness();
+
+		await session.rate(Rating.Good);
+
+		expect(session.current?.cardId).toBe('second');
+		expect(session.queue.map((queued) => queued.cardId)).toEqual(['first']);
+		expect(session.sessionCompleted).toBe(0);
+	});
+
+	it('completes a short-delay card when learn ahead is disabled', async () => {
+		const { settings, session } = makeHarness();
+		settings.learnAhead = false;
+
+		await session.rate(Rating.Good);
+
+		expect(session.current?.cardId).toBe('second');
+		expect(session.queue).toEqual([]);
+		expect(session.sessionCompleted).toBe(1);
+	});
+
+	it('completes a card whose delay exceeds a custom learn-ahead limit', async () => {
+		const { settings, session } = makeHarness();
+		settings.learnAheadMinutes = 5;
+
+		await session.rate(Rating.Good);
+
+		expect(session.current?.cardId).toBe('second');
+		expect(session.queue).toEqual([]);
+		expect(session.sessionCompleted).toBe(1);
+	});
+
 	it('advances for a completed card and rolls back on undo', async () => {
 		const { session } = makeHarness();
 

@@ -19,7 +19,7 @@ export interface ReviewEvent {
 	s: number;
 	/** 1 Again, 2 Hard, 3 Good, 4 Easy. */
 	r: Grade;
-	/** Desired retention used for this review; recorded for provenance, ignored by current replay. */
+	/** Desired retention used for this review; replay may use it according to settings. */
 	dr: number;
 }
 

@@ -7,7 +7,7 @@ import {
 	TFile,
 	type App,
 } from 'obsidian';
-import { Rating, type FSRS, type Grade } from 'ts-fsrs';
+import { Rating, type Grade } from 'ts-fsrs';
 import { appendEvent, appendUndoEvent } from '../log';
 import { parseCardNote } from '../core/card-note';
 import type { BuryEvent, CardEvent, ReviewEvent } from '../core/events';
@@ -22,9 +22,13 @@ import {
 	selectCards,
 	type QueueItem,
 } from '../core/queue';
-import { applyRating, formatInterval, previewDue } from '../core/scheduler';
+import { applyRating, formatInterval, makeFsrs, previewDue } from '../core/scheduler';
 import { STRINGS } from '../i18n';
-import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
+import {
+	effectiveLearnAheadMinutes,
+	effectiveNewCardsPerDay,
+	type RememberSettings,
+} from '../settings';
 import { openCardDefinition } from './open-card-definition';
 import type { RememberSnapshot } from './remember-snapshot';
 import { displayDeck } from './study-page';
@@ -53,7 +57,6 @@ export class ReviewSession extends Component {
 	constructor(
 		private app: App,
 		private settings: RememberSettings,
-		private fsrs: FSRS,
 		private onFinish: () => Promise<void>,
 	) {
 		super();
@@ -214,7 +217,9 @@ export class ReviewSession extends Component {
 		this.renderSide(card, this.current.back);
 
 		const now = new Date();
-		const previews = previewDue(this.fsrs, this.current.state, now);
+		const fsrs = makeFsrs(this.settings.desiredRetention);
+		const previews = previewDue(fsrs, this.current.state, now);
+		const learnAheadMinutes = effectiveLearnAheadMinutes(this.settings);
 		const footer = review.createDiv({ cls: 'remember-footer' });
 		const buttons = footer.createDiv({ cls: 'remember-buttons remember-rating-buttons' });
 		const ratings: [Grade, string, string][] = [
@@ -232,7 +237,7 @@ export class ReviewSession extends Component {
 			text.createSpan({ cls: 'remember-response-label', text: label });
 			const details = text.createSpan({ cls: 'remember-response-details' });
 			details.createSpan({ cls: 'remember-interval', text: formatInterval(now, due) });
-			if (returnsToCurrentSession(due, now)) {
+			if (returnsToCurrentSession(due, now, learnAheadMinutes)) {
 				const returns = details.createSpan({ cls: 'remember-session-return' });
 				setIcon(returns, 'repeat-2');
 				setTooltip(returns, STRINGS.review.returnsThisSession);
@@ -253,6 +258,7 @@ export class ReviewSession extends Component {
 		this.busy = true;
 		try {
 			const when = new Date();
+			const fsrs = makeFsrs(this.settings.desiredRetention);
 			const event: ReviewEvent = {
 				v: 1,
 				k: 'r',
@@ -261,7 +267,7 @@ export class ReviewSession extends Component {
 				c: item.cardId,
 				s: item.sub,
 				r: grade,
-				dr: this.fsrs.parameters.request_retention,
+				dr: fsrs.parameters.request_retention,
 			};
 			try {
 				await appendEvent(this.app, this.settings.rootFolder, event);
@@ -269,8 +275,9 @@ export class ReviewSession extends Component {
 				new Notice(STRINGS.notices.couldNotSaveReview(error));
 				return;
 			}
-			const next = applyRating(this.fsrs, item.state, when, grade);
-			const reentersSession = returnsToCurrentSession(next.due, when);
+			const next = applyRating(fsrs, item.state, when, grade);
+			const learnAheadMinutes = effectiveLearnAheadMinutes(this.settings);
+			const reentersSession = returnsToCurrentSession(next.due, when, learnAheadMinutes);
 			this.undoStack.push({
 				item,
 				event,
