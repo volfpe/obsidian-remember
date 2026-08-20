@@ -77,6 +77,9 @@ export const STRINGS = {
 		preparing: 'Preparing review…',
 		showAnswer: 'Show answer',
 		returnsThisSession: 'Returns later in this session',
+		practiceTitle: (deck: string) => `${deck} · Practice`,
+		practiceAgainTooltip: 'Repeats in 1 minute during this practice session',
+		practiceHardTooltip: 'Repeats in 10 minutes during this practice session',
 		ratings: {
 			again: 'Again',
 			hard: 'Hard',
@@ -93,6 +96,9 @@ export const STRINGS = {
 		nothingReady: 'No cards to review',
 		ready: (count: number) => `${count} ${count === 1 ? 'card' : 'cards'} ready`,
 		startReview: 'Start review',
+		startPractice: 'Practice',
+		practiceDescription: 'Known cards only. Your schedule stays unchanged.',
+		moreStudyOptions: 'More study options',
 		forecast: {
 			title: 'Upcoming 14 days',
 			empty: 'No workload forecast for the next 14 days.',

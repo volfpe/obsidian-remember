@@ -1,4 +1,5 @@
-import { setTooltip } from 'obsidian';
+import { setIcon, setTooltip } from 'obsidian';
+import { hasPracticeCards } from '../core/practice';
 import {
 	countDeckStats,
 	introducedTodaySiblingKeys,
@@ -101,10 +102,15 @@ export function renderDeckStudyPage(
 	deck: string,
 	onStartReview: () => void,
 	now = new Date(),
+	onStartPractice: () => void = () => undefined,
 ): void {
 	parent.empty();
 	const counts = deckCounts(snapshot, settings, deck, now);
 	const ready = counts.due + counts.new;
+	const cards = snapshot.cards.filter((card) => isDescendantDeck(card.deck, deck));
+	const canPractice = hasPracticeCards(cards, snapshot.states, now, {
+		manuallyBuriedCardIds: manuallyBuriedCardIds(snapshot.buries, now),
+	});
 	const page = parent.createDiv({ cls: 'remember-deck-study-page' });
 	const primary = page.createDiv({ cls: 'remember-deck-study-primary' });
 	const readiness = primary.createDiv({ cls: 'remember-deck-readiness' });
@@ -113,11 +119,64 @@ export function renderDeckStudyPage(
 		text: ready === 0 ? STRINGS.study.nothingReady : STRINGS.study.ready(ready),
 	});
 	if (ready > 0) {
-		const start = primary.createEl('button', {
+		const actions = primary.createDiv({ cls: 'remember-deck-study-actions' });
+		const start = actions.createEl('button', {
 			cls: 'mod-cta remember-start-review',
 			text: STRINGS.study.startReview,
 		});
 		start.addEventListener('click', onStartReview);
+		if (canPractice) {
+			actions.addClass('has-options');
+			const practice = actions.createEl('button', {
+				cls: 'remember-start-practice remember-start-practice-option',
+				text: STRINGS.study.startPractice,
+			});
+			practice.tabIndex = -1;
+			practice.setAttribute('aria-hidden', 'true');
+			setTooltip(practice, STRINGS.study.practiceDescription);
+			practice.setAttribute('aria-description', STRINGS.study.practiceDescription);
+			practice.addEventListener('click', onStartPractice);
+			const options = actions.createEl('button', {
+				cls: 'mod-cta remember-start-options',
+			});
+			const optionsIcon = options.createSpan({ cls: 'remember-start-options-icon' });
+			setIcon(optionsIcon, 'chevron-down');
+			options.setAttribute('aria-label', STRINGS.study.moreStudyOptions);
+			options.setAttribute('aria-expanded', 'false');
+			let closeOnOutsideClick: (() => void) | null = null;
+			const closePractice = () => {
+				actions.removeClass('is-open');
+				practice.tabIndex = -1;
+				practice.setAttribute('aria-hidden', 'true');
+				options.setAttribute('aria-expanded', 'false');
+				if (closeOnOutsideClick) {
+					options.ownerDocument.removeEventListener('click', closeOnOutsideClick);
+					closeOnOutsideClick = null;
+				}
+			};
+			options.addEventListener('click', (event) => {
+				event.stopPropagation();
+				if (actions.hasClass('is-open')) {
+					closePractice();
+					return;
+				}
+				actions.addClass('is-open');
+				practice.tabIndex = 0;
+				practice.setAttribute('aria-hidden', 'false');
+				options.setAttribute('aria-expanded', 'true');
+				closeOnOutsideClick = closePractice;
+				options.ownerDocument.addEventListener('click', closeOnOutsideClick, { once: true });
+			});
+		}
+	} else if (canPractice) {
+		const actions = primary.createDiv({ cls: 'remember-deck-study-actions' });
+		const practice = actions.createEl('button', {
+			cls: 'remember-start-practice',
+			text: STRINGS.study.startPractice,
+		});
+		setTooltip(practice, STRINGS.study.practiceDescription);
+		practice.setAttribute('aria-description', STRINGS.study.practiceDescription);
+		practice.addEventListener('click', onStartPractice);
 	}
 
 	const status = page.createDiv({ cls: 'remember-deck-status' });
@@ -138,7 +197,6 @@ export function renderDeckStudyPage(
 	}
 	createStatus(status, STRINGS.review.counts.total, counts.total, 'total');
 
-	const cards = snapshot.cards.filter((card) => isDescendantDeck(card.deck, deck));
 	const forecast = forecastDeck(cards, snapshot.states, snapshot.events, now, {
 		days: 14,
 		newCardsPerDay: effectiveNewCardsPerDay(settings),

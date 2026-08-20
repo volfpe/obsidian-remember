@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Rating } from 'ts-fsrs';
 import type { NoteCard } from '../core/queue';
+import { foldEvents, makeFsrs } from '../core/scheduler';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { RememberSnapshot } from './remember-snapshot';
 import { renderDeckChooser, renderDeckStudyPage } from './study-page';
@@ -117,5 +119,83 @@ describe('deck-first study pages', () => {
 		expect(parent.querySelector('.remember-start-review')).toBeNull();
 		expect(parent.textContent).toContain('No cards to review');
 		expect(parent.querySelector('.remember-deck-status-waiting')?.textContent).toBe('1Waiting');
+	});
+
+	it('offers Practice only when the deck has a learned card due after session start', () => {
+		const parent = createDiv();
+		const data = snapshot();
+		data.cards[0].id = 'known';
+		data.states = foldEvents(makeFsrs(0.9), [
+			{
+				v: 1,
+				k: 'r',
+				i: 'known-review',
+				t: '2026-08-15T11:59:00.000Z',
+				c: 'known',
+				s: 0,
+				r: Rating.Good,
+				dr: 0.9,
+			},
+		]);
+		const startPractice = vi.fn();
+
+		renderDeckStudyPage(
+			parent,
+			data,
+			{ ...DEFAULT_SETTINGS },
+			'Language',
+			vi.fn(),
+			now,
+			startPractice,
+		);
+
+		const button = parent.querySelector<HTMLButtonElement>('.remember-start-practice')!;
+		expect(button.textContent).toBe('Practice');
+		expect(button.classList.contains('mod-cta')).toBe(false);
+		expect(button.getAttribute('aria-description')).toBe(
+			'Known cards only. Your schedule stays unchanged.',
+		);
+		expect(button.closest('.remember-deck-study-primary')).not.toBeNull();
+		expect(button.parentElement?.classList.contains('remember-deck-study-actions')).toBe(true);
+		expect(parent.querySelector('.remember-start-review')).toBeNull();
+		button.click();
+		expect(startPractice).toHaveBeenCalledOnce();
+
+		data.cards.push({
+			...data.cards[0],
+			id: null,
+			path: 'language/new.md',
+			siblings: [{ sub: 0, front: 'adiós', back: 'goodbye' }],
+		});
+		renderDeckStudyPage(
+			parent,
+			data,
+			{ ...DEFAULT_SETTINGS },
+			'Language',
+			vi.fn(),
+			now,
+			startPractice,
+		);
+		expect(parent.querySelector('.remember-start-review')).not.toBeNull();
+		const options = parent.querySelector<HTMLButtonElement>('.remember-start-options')!;
+		expect(options.getAttribute('aria-label')).toBe(
+			'More study options',
+		);
+		const practiceOption = parent.querySelector<HTMLButtonElement>('.remember-start-practice')!;
+		expect(practiceOption.getAttribute('aria-hidden')).toBe('true');
+		expect(practiceOption.tabIndex).toBe(-1);
+		expect(practiceOption.textContent).toBe('Practice');
+		expect(practiceOption.getAttribute('aria-description')).toBe(
+			'Known cards only. Your schedule stays unchanged.',
+		);
+		options.click();
+		expect(practiceOption.getAttribute('aria-hidden')).toBe('false');
+		expect(practiceOption.tabIndex).toBe(0);
+		expect(options.getAttribute('aria-expanded')).toBe('true');
+		expect(options.parentElement?.classList.contains('is-open')).toBe(true);
+		options.click();
+		expect(practiceOption.getAttribute('aria-hidden')).toBe('true');
+		expect(practiceOption.tabIndex).toBe(-1);
+		expect(options.parentElement?.classList.contains('is-open')).toBe(false);
 	});
 });

@@ -1,7 +1,9 @@
 import { Rating, type Grade } from 'ts-fsrs';
 import { App } from 'obsidian-test-mocks/obsidian';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PracticeSessionQueue } from '../core/practice';
 import type { QueueItem } from '../core/queue';
+import { applyRating, makeFsrs } from '../core/scheduler';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { RememberSettings } from '../settings';
 import { ReviewSession } from './review-session';
@@ -12,12 +14,16 @@ interface ReviewSessionHarness {
 	current: QueueItem | null;
 	leave(): Promise<void>;
 	phase: 'idle' | 'question' | 'answer';
+	mode: 'review' | 'practice';
 	queue: QueueItem[];
+	practiceQueue: PracticeSessionQueue | null;
 	refreshCurrentDefinition(): Promise<void>;
 	sessionTotal: number;
 	sessionCompleted: number;
 	bury(): Promise<void>;
 	rate(grade: Grade): Promise<void>;
+	practiceRate(grade: Grade, when?: Date): void;
+	showAnswer(): void;
 	undo(): Promise<void>;
 }
 
@@ -242,5 +248,69 @@ describe('session progress', () => {
 		expect(session.current).toBeNull();
 		expect(session.queue).toEqual([]);
 		expect(finished).toHaveBeenCalledOnce();
+	});
+});
+
+describe('Practice mode', () => {
+	function enterPractice(session: ReviewSessionHarness): void {
+		session.mode = 'practice';
+		session.phase = 'answer';
+		session.sessionTotal = 2;
+		session.sessionCompleted = 0;
+		session.practiceQueue = new PracticeSessionQueue(session.queue);
+		session.queue = [];
+	}
+
+	it('keeps ratings in memory and learns ahead when only a retry remains', async () => {
+		const { app, session } = makeHarness();
+		enterPractice(session);
+		session.current!.state = applyRating(
+			makeFsrs(0.9),
+			null,
+			new Date('2026-08-01T10:00:00.000Z'),
+			Rating.Good,
+		);
+		const realState = session.current!.state;
+		const realDue = realState.due.getTime();
+		const when = new Date();
+
+		session.practiceRate(Rating.Again, when);
+
+		expect(session.current?.cardId).toBe('second');
+		expect(realState.due.getTime()).toBe(realDue);
+
+		session.phase = 'answer';
+		session.practiceRate(Rating.Good, when);
+
+		expect(session.current?.cardId).toBe('first');
+		expect(session.current?.state).toBe(realState);
+		expect(session.sessionCompleted).toBe(1);
+		expect(await app.vault.adapter.exists('Remember/reviews-device0000001.rememberlog')).toBe(false);
+	});
+
+	it('renders temporary delays only for Again and Hard and offers no bury action', () => {
+		const { session } = makeHarness();
+		enterPractice(session);
+
+		session.showAnswer();
+
+		expect(
+			Array.from(session.container!.querySelectorAll('.remember-interval')).map(
+				(element) => element.textContent,
+			),
+		).toEqual(['1m', '10m']);
+		expect(session.container!.querySelectorAll('.remember-session-return')).toHaveLength(2);
+		expect(
+			Array.from(session.container!.querySelectorAll('.remember-session-return')).map((element) =>
+				element.getAttribute('aria-label'),
+			),
+		).toEqual([
+			'Repeats in 1 minute during this practice session',
+			'Repeats in 10 minutes during this practice session',
+		]);
+		expect(session.container!.textContent).toContain('Again1m');
+		expect(session.container!.textContent).toContain('Hard10m');
+		expect(session.container!.querySelector('.remember-session-bury')).toBeNull();
+		expect(session.container!.querySelector('.remember-session-undo')).toBeNull();
 	});
 });

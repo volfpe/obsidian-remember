@@ -13,6 +13,11 @@ import { parseCardNote } from '../core/card-note';
 import type { BuryEvent, CardEvent, ReviewEvent } from '../core/events';
 import { randomId } from '../core/id';
 import {
+	buildPracticeQueue,
+	practiceDelayMinutes,
+	PracticeSessionQueue,
+} from '../core/practice';
+import {
 	buildQueue,
 	countDeckStats,
 	introducedTodaySiblingKeys,
@@ -43,8 +48,10 @@ interface UndoEntry {
 
 export class ReviewSession extends Component {
 	private phase: 'idle' | 'question' | 'answer' = 'idle';
+	private mode: 'review' | 'practice' = 'review';
 	private container: HTMLElement | null = null;
 	private queue: QueueItem[] = [];
+	private practiceQueue: PracticeSessionQueue | null = null;
 	private current: QueueItem | null = null;
 	private undoStack: UndoEntry[] = [];
 	private sessionTotal = 0;
@@ -80,6 +87,8 @@ export class ReviewSession extends Component {
 		if (this.busy) return;
 		this.busy = true;
 		this.container = parent;
+		this.mode = 'review';
+		this.practiceQueue = null;
 		try {
 			const selection = selectCards(snapshot.cards, deck);
 			const { events, buries, states } = snapshot;
@@ -111,6 +120,31 @@ export class ReviewSession extends Component {
 		}
 	}
 
+	async startPractice(parent: HTMLElement, deck: string, snapshot: RememberSnapshot): Promise<void> {
+		if (this.busy) return;
+		this.busy = true;
+		this.container = parent;
+		this.mode = 'practice';
+		try {
+			// Freeze eligibility at the instant this Practice session begins.
+			const now = new Date();
+			const selection = selectCards(snapshot.cards, deck);
+			this.practiceQueue = new PracticeSessionQueue(
+				buildPracticeQueue(selection.kept, snapshot.states, now, {
+					manuallyBuriedCardIds: manuallyBuriedCardIds(snapshot.buries, now),
+				}),
+			);
+			this.queue = [];
+			this.sessionTotal = this.practiceQueue.total;
+			this.sessionCompleted = 0;
+			this.undoStack = [];
+			this.sessionDeck = deck;
+			this.showNext();
+		} finally {
+			this.busy = false;
+		}
+	}
+
 	async leave(): Promise<void> {
 		if (this.busy) return;
 		this.busy = true;
@@ -122,7 +156,10 @@ export class ReviewSession extends Component {
 	}
 
 	private showNext(): void {
-		this.current = this.queue.shift() ?? null;
+		this.current =
+			this.mode === 'practice'
+				? (this.practiceQueue?.next(new Date()) ?? null)
+				: (this.queue.shift() ?? null);
 		if (this.current === null) {
 			void this.finish();
 			return;
@@ -134,7 +171,12 @@ export class ReviewSession extends Component {
 		const header = parent.createDiv({ cls: 'remember-session-header' });
 		header.createSpan({
 			cls: 'remember-session-title-name',
-			text: this.sessionDeck === null ? '' : displayDeck(this.sessionDeck),
+			text:
+				this.sessionDeck === null
+					? ''
+					: this.mode === 'practice'
+						? STRINGS.review.practiceTitle(displayDeck(this.sessionDeck))
+						: displayDeck(this.sessionDeck),
 		});
 		this.progressEl = header.createSpan({ cls: 'remember-progress' });
 		this.progressCurrentEl = this.progressEl.createSpan({ cls: 'remember-progress-current' });
@@ -144,7 +186,7 @@ export class ReviewSession extends Component {
 		});
 		this.progressEl.createSpan({ cls: 'remember-progress-total', text: String(this.sessionTotal) });
 		const actions = header.createDiv({ cls: 'remember-session-actions' });
-		if (this.phase === 'question' && this.undoStack.length > 0) {
+		if (this.mode === 'review' && this.phase === 'question' && this.undoStack.length > 0) {
 			const undo = actions.createEl('button', {
 				cls: 'clickable-icon remember-session-undo',
 			});
@@ -162,13 +204,15 @@ export class ReviewSession extends Component {
 		source.addEventListener('click', () => {
 			if (this.current) void openCardDefinition(this.app, this.current);
 		});
-		const bury = actions.createEl('button', {
-			cls: 'clickable-icon remember-session-bury',
-		});
-		setIcon(bury, 'archive');
-		setTooltip(bury, STRINGS.review.buryToday);
-		bury.setAttribute('aria-label', STRINGS.review.buryToday);
-		bury.addEventListener('click', () => void this.bury());
+		if (this.mode === 'review') {
+			const bury = actions.createEl('button', {
+				cls: 'clickable-icon remember-session-bury',
+			});
+			setIcon(bury, 'archive');
+			setTooltip(bury, STRINGS.review.buryToday);
+			bury.setAttribute('aria-label', STRINGS.review.buryToday);
+			bury.addEventListener('click', () => void this.bury());
+		}
 		actions.createSpan({ cls: 'remember-session-action-divider', attr: { 'aria-hidden': 'true' } });
 		const back = actions.createEl('button', {
 			cls: 'clickable-icon remember-session-back',
@@ -217,8 +261,10 @@ export class ReviewSession extends Component {
 		this.renderSide(card, this.current.back);
 
 		const now = new Date();
-		const fsrs = makeFsrs(this.settings.desiredRetention);
-		const previews = previewDue(fsrs, this.current.state, now);
+		const previews =
+			this.mode === 'review'
+				? previewDue(makeFsrs(this.settings.desiredRetention), this.current.state, now)
+				: null;
 		const learnAheadMinutes = effectiveLearnAheadMinutes(this.settings);
 		const footer = review.createDiv({ cls: 'remember-footer' });
 		const buttons = footer.createDiv({ cls: 'remember-buttons remember-rating-buttons' });
@@ -229,22 +275,53 @@ export class ReviewSession extends Component {
 			[Rating.Easy, STRINGS.review.ratings.easy, 'easy'],
 		];
 		for (const [grade, label, tone] of ratings) {
-			const due = previews[grade];
 			const button = buttons.createEl('button', {
 				cls: `remember-response remember-rate remember-rate-${tone}`,
 			});
 			const text = button.createSpan({ cls: 'remember-response-text' });
 			text.createSpan({ cls: 'remember-response-label', text: label });
-			const details = text.createSpan({ cls: 'remember-response-details' });
-			details.createSpan({ cls: 'remember-interval', text: formatInterval(now, due) });
-			if (returnsToCurrentSession(due, now, learnAheadMinutes)) {
-				const returns = details.createSpan({ cls: 'remember-session-return' });
-				setIcon(returns, 'repeat-2');
-				setTooltip(returns, STRINGS.review.returnsThisSession);
-				returns.setAttribute('aria-label', STRINGS.review.returnsThisSession);
+			if (this.mode === 'practice') {
+				const delay = practiceDelayMinutes(grade);
+				if (delay !== null) {
+					const tooltip =
+						grade === Rating.Again
+							? STRINGS.review.practiceAgainTooltip
+							: STRINGS.review.practiceHardTooltip;
+					const details = text.createSpan({ cls: 'remember-response-details' });
+					details.createSpan({ cls: 'remember-interval', text: `${delay}m` });
+					const returns = details.createSpan({ cls: 'remember-session-return' });
+					setIcon(returns, 'repeat-2');
+					setTooltip(returns, tooltip);
+					returns.setAttribute('aria-label', tooltip);
+				}
+				button.addEventListener('click', () => this.practiceRate(grade));
+			} else if (previews !== null) {
+				const due = previews[grade];
+				const details = text.createSpan({ cls: 'remember-response-details' });
+				details.createSpan({ cls: 'remember-interval', text: formatInterval(now, due) });
+				if (returnsToCurrentSession(due, now, learnAheadMinutes)) {
+					const returns = details.createSpan({ cls: 'remember-session-return' });
+					setIcon(returns, 'repeat-2');
+					setTooltip(returns, STRINGS.review.returnsThisSession);
+					returns.setAttribute('aria-label', STRINGS.review.returnsThisSession);
+				}
+				button.addEventListener('click', () => void this.rate(grade));
 			}
-			button.addEventListener('click', () => void this.rate(grade));
 		}
+	}
+
+	/** Practice ratings only mutate this session's in-memory retry queue. */
+	practiceRate(grade: Grade, when = new Date()): void {
+		const item = this.current;
+		if (
+			!item ||
+			!this.practiceQueue ||
+			this.mode !== 'practice' ||
+			this.phase !== 'answer' ||
+			this.busy
+		) return;
+		if (this.practiceQueue.answer(item, grade, when)) this.sessionCompleted++;
+		this.showNext();
 	}
 
 	private renderSide(parent: HTMLElement, markdown: string): void {
@@ -254,7 +331,7 @@ export class ReviewSession extends Component {
 
 	async rate(grade: Grade): Promise<void> {
 		const item = this.current;
-		if (!item || this.phase !== 'answer' || this.busy) return;
+		if (!item || this.mode !== 'review' || this.phase !== 'answer' || this.busy) return;
 		this.busy = true;
 		try {
 			const when = new Date();
@@ -297,7 +374,7 @@ export class ReviewSession extends Component {
 
 	async bury(): Promise<void> {
 		const item = this.current;
-		if (!item || this.phase === 'idle' || this.busy) return;
+		if (!item || this.mode !== 'review' || this.phase === 'idle' || this.busy) return;
 		this.busy = true;
 		try {
 			const when = new Date();
@@ -343,7 +420,9 @@ export class ReviewSession extends Component {
 		}
 		if (definition.id !== item.cardId) return;
 		if (definition.suspended) {
-			const queuedSiblings = this.queue.filter((queued) => queued.cardId === item.cardId).length;
+			const queuedSiblings =
+				this.queue.filter((queued) => queued.cardId === item.cardId).length +
+				(this.practiceQueue?.removeCard(item.cardId) ?? 0);
 			this.queue = this.queue.filter((queued) => queued.cardId !== item.cardId);
 			this.sessionTotal = Math.max(
 				this.sessionCompleted,
@@ -361,7 +440,7 @@ export class ReviewSession extends Component {
 	}
 
 	async undo(): Promise<void> {
-		if (this.busy) return;
+		if (this.mode !== 'review' || this.busy) return;
 		const entry = this.undoStack[this.undoStack.length - 1];
 		if (!entry) return;
 		this.busy = true;
@@ -402,7 +481,9 @@ export class ReviewSession extends Component {
 		this.container = null;
 		this.current = null;
 		this.queue = [];
+		this.practiceQueue = null;
 		this.undoStack = [];
+		this.mode = 'review';
 		this.sessionDeck = null;
 		this.progressEl = null;
 		this.progressCurrentEl = null;

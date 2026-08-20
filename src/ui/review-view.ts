@@ -226,6 +226,7 @@ export class ReviewView extends ItemView {
 				deck,
 				() => void this.startSession(),
 				snapshot.loadedAt,
+				() => void this.startPracticeSession(),
 			);
 			return;
 		}
@@ -281,6 +282,14 @@ export class ReviewView extends ItemView {
 	}
 
 	private async startSession(): Promise<void> {
+		await this.startSelectedSession('review');
+	}
+
+	private async startPracticeSession(): Promise<void> {
+		await this.startSelectedSession('practice');
+	}
+
+	private async startSelectedSession(mode: 'review' | 'practice'): Promise<void> {
 		if (this.startingSession || this.reviewSession?.active) return;
 		const deck = this.selectedDeck;
 		if (deck === null) return;
@@ -293,7 +302,8 @@ export class ReviewView extends ItemView {
 		this.body.empty();
 		this.body.createEl('p', { cls: 'remember-empty', text: STRINGS.review.preparing });
 		try {
-			await session.start(this.body, deck, snapshot);
+			if (mode === 'practice') await session.startPractice(this.body, deck, snapshot);
+			else await session.start(this.body, deck, snapshot);
 		} catch (error) {
 			console.warn('Remember: could not start review session', error);
 			new Notice(STRINGS.notices.couldNotStartSession(error));
