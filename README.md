@@ -6,7 +6,7 @@ Built for reliable use across synced devices.
 
 ## Usage
 
-Every flashcard is a Markdown note in your Remember folder. Use folders and subfolders to organize cards into decks and subdecks.
+Every flashcard is a Markdown note in your Remember folder (`Remember/` by default). Use subfolders to organize cards into decks and subdecks.
 
 Run **Remember: Open** (or click the button in the left toolbar). Then click **New card** to add a card or select a deck and start a review.
 
@@ -59,7 +59,7 @@ You can also create a note directly in the Remember folder and add `# Front`/`# 
 
 ## Card metadata
 
-Each card's frontmatter contains:
+Card frontmatter uses the following properties:
 
 - `remember-id` — the generated stable card identifier
 - `remember-type` — the card format: `basic` or `cloze`
