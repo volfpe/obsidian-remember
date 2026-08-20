@@ -2,6 +2,7 @@ import { ItemView, Notice, setIcon, setTooltip, type IconName, type WorkspaceLea
 import { isDescendantDeck } from '../core/queue';
 import { STRINGS } from '../i18n';
 import type { RememberSettings } from '../settings';
+import { AddCardModal } from './add-card-modal';
 import { CardsPage } from './cards/cards-page';
 import { REMEMBER_VIEW_DEFINITION } from './remember-view-definition';
 import {
@@ -25,6 +26,7 @@ export class ReviewView extends ItemView {
 	private backToDecksButtonEl: HTMLButtonElement | null = null;
 	private navEl: HTMLElement | null = null;
 	private refreshButtonEl: HTMLButtonElement | null = null;
+	private newCardButtonEl: HTMLButtonElement | null = null;
 	private refreshGeneration = 0;
 	private startingSession = false;
 	private cardsPage: CardsPage | null = null;
@@ -65,6 +67,10 @@ export class ReviewView extends ItemView {
 		return {};
 	}
 
+	refresh(): Promise<void> {
+		return this.refreshData();
+	}
+
 	async onOpen(): Promise<void> {
 		this.contentEl.addClass('remember-view');
 		this.contentEl.empty();
@@ -78,6 +84,15 @@ export class ReviewView extends ItemView {
 		this.backToDecksButtonEl.setAttribute('aria-label', STRINGS.study.backToDecks);
 		this.backToDecksButtonEl.addEventListener('click', () => this.clearDeck());
 		this.contentTitleEl = header.createDiv({ cls: 'remember-view-title' });
+		this.newCardButtonEl = header.createEl('button', {
+			cls: 'remember-new-card-header is-hidden',
+		});
+		setIcon(this.newCardButtonEl.createSpan({ cls: 'remember-new-card-header-icon' }), 'copy-plus');
+		this.newCardButtonEl.createSpan({
+			cls: 'remember-new-card-header-label',
+			text: STRINGS.addCard.title,
+		});
+		this.newCardButtonEl.addEventListener('click', () => this.openNewCard());
 		this.refreshButtonEl = header.createEl('button', {
 			cls: 'clickable-icon remember-refresh',
 		});
@@ -132,6 +147,7 @@ export class ReviewView extends ItemView {
 		this.backToDecksButtonEl = null;
 		this.navEl = null;
 		this.refreshButtonEl = null;
+		this.newCardButtonEl = null;
 		this.snapshot = null;
 		this.selectedDeck = null;
 		this.contentEl.empty();
@@ -173,6 +189,7 @@ export class ReviewView extends ItemView {
 		this.backToDecksButtonEl?.toggleClass('is-hidden', !hasSelectedDeck);
 		this.contentTitleEl?.toggleClass('is-hidden', !hasSelectedDeck);
 		this.contentTitleEl?.setText(this.selectedDeck === null ? '' : displayDeck(this.selectedDeck));
+		this.newCardButtonEl?.toggleClass('is-hidden', !hasSelectedDeck);
 	}
 
 	private selectDeck(deck: string): void {
@@ -215,6 +232,7 @@ export class ReviewView extends ItemView {
 				this.settings,
 				(selected) => this.selectDeck(selected),
 				snapshot.loadedAt,
+				() => this.openNewCard(''),
 			);
 			return;
 		}
@@ -238,6 +256,12 @@ export class ReviewView extends ItemView {
 		const page = this.body.createDiv({ cls: 'remember-placeholder-page' });
 		page.createEl('h2', { text: STRINGS.study.tabs.statistics });
 		page.createEl('p', { text: STRINGS.study.placeholders.statistics });
+	}
+
+	private openNewCard(deck = this.selectedDeck): void {
+		if (deck === null || this.startingSession || this.reviewSession?.active) return;
+		const folder = deck === '' ? this.settings.rootFolder : `${this.settings.rootFolder}/${deck}`;
+		new AddCardModal(this.app, this.settings, folder, () => this.refreshData()).open();
 	}
 
 	private async refreshData(notifyWhenComplete = false): Promise<void> {

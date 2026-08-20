@@ -32,14 +32,17 @@ export function renderDeckChooser(
 	settings: RememberSettings,
 	onSelectDeck: (deck: string) => void,
 	now = new Date(),
+	onNewCard: () => void = () => undefined,
 ): void {
 	parent.empty();
 	const page = parent.createDiv({ cls: 'remember-study-page remember-deck-chooser' });
 	if (snapshot.cards.length === 0) {
-		page.createEl('p', {
-			cls: 'remember-empty',
-			text: STRINGS.review.noCards,
+		const empty = page.createDiv({ cls: 'remember-new-card-empty' });
+		const button = empty.createEl('button', {
+			cls: 'mod-cta remember-new-card-empty-button',
+			text: STRINGS.addCard.title,
 		});
+		button.addEventListener('click', onNewCard);
 		return;
 	}
 

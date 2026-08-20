@@ -32,6 +32,21 @@ function snapshot(): RememberSnapshot {
 }
 
 describe('deck-first study pages', () => {
+	it('reduces the completely empty state to the new-card action', () => {
+		const parent = createDiv();
+		const newCard = vi.fn();
+		const data = snapshot();
+		data.cards = [];
+
+		renderDeckChooser(parent, data, { ...DEFAULT_SETTINGS }, vi.fn(), now, newCard);
+
+		const button = parent.querySelector<HTMLButtonElement>('.remember-new-card-empty-button');
+		expect(button?.textContent).toBe('New card');
+		expect(parent.textContent).toBe('New card');
+		button?.click();
+		expect(newCard).toHaveBeenCalledOnce();
+	});
+
 	it('allows choosing a deck even when its new cards are waiting', () => {
 		const parent = createDiv();
 		const selectDeck = vi.fn();

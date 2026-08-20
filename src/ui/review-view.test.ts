@@ -128,6 +128,9 @@ describe('Remember shell', () => {
 		expect(view.contentEl.querySelector('.remember-back-to-decks')?.classList).toContain(
 			'is-hidden',
 		);
+		expect(view.contentEl.querySelector('.remember-new-card-header')?.classList).toContain(
+			'is-hidden',
+		);
 
 		(view as unknown as { selectDeck(deck: string): void }).selectDeck('Remember/Spanish');
 
@@ -141,6 +144,13 @@ describe('Remember shell', () => {
 		);
 		expect(view.contentEl.querySelector('.remember-back-to-decks')?.classList).not.toContain(
 			'is-hidden',
+		);
+		expect(view.contentEl.querySelector('.remember-new-card-header')?.classList).not.toContain(
+			'is-hidden',
+		);
+		expect(view.contentEl.querySelector('.remember-new-card-header')?.textContent).toBe('New card');
+		expect(view.contentEl.querySelector('.remember-new-card-header')?.hasAttribute('aria-label')).toBe(
+			false,
 		);
 	});
 

@@ -8,12 +8,9 @@ Built for reliable use across synced devices.
 
 Every flashcard is a Markdown note in your Remember folder. Use folders and subfolders to organize cards into decks and subdecks.
 
-To create a card, run **Remember: new card** or click its left toolbar button.
-
-To review, run the **Remember: Open** command or click its left toolbar icon.
+Run **Remember: Open** (or click the button in the left toolbar). Then click **New card** to add a card or select a deck and start a review.
 
 The plugin automatically manages the card's frontmatter. See [Card metadata](#card-metadata) for details.
-
 
 ### Basic cards
 

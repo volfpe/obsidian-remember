@@ -43,7 +43,6 @@ export const STRINGS = {
 		learnAheadMinutesValidation: 'Enter a whole number from 1 to 1440.',
 	},
 	review: {
-		noCards: 'No cards found. Create one with the "Remember: New card" button or command.',
 		deckHeader: 'Deck',
 		counts: {
 			due: {
@@ -194,6 +193,7 @@ export const STRINGS = {
 		created: (name: string) => `Created "${name}"`,
 	},
 	notices: {
+		cardCreated: 'Card created.',
 		duplicateCardId: (path: string) =>
 			`Remember: duplicate card id in ${path}.`,
 		couldNotCreateCard: (error: unknown) => `Remember: could not create the card — ${String(error)}`,

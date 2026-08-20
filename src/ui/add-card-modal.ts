@@ -35,11 +35,11 @@ function loadLastChoices(app: App): LastChoices {
 }
 
 /**
- * One small dialog, optimized for few steps: deck, type, and reverse are prefilled
- * from the last created card, and the content fields match the type (Front/Back for
- * basic, one Text field for cloze). All content is optional — an unfilled card is
- * created as an empty template to finish in the note. "Create" opens the new note;
- * "Create & continue" keeps the dialog open for the next card.
+ * One small dialog, optimized for few steps: a contextual deck wins when provided;
+ * otherwise deck, type, and reverse come from the last created card. The content fields
+ * match the type (Front/Back for basic, one Text field for cloze). All content is
+ * optional — an unfilled card is created as an empty template to finish in the note.
+ * "Create" opens the new note; "Create & continue" keeps the dialog open for the next card.
  * New decks are made by creating folders in the file explorer, not here.
  */
 export class AddCardModal extends Modal {
@@ -62,6 +62,8 @@ export class AddCardModal extends Modal {
 	constructor(
 		app: App,
 		private settings: RememberSettings,
+		private initialDeck: string | null = null,
+		private onCreated: () => void | Promise<void> = () => undefined,
 	) {
 		super(app);
 		this.deck = this.settings.rootFolder;
@@ -73,7 +75,12 @@ export class AddCardModal extends Modal {
 		const root = this.settings.rootFolder;
 		const decks = deckFolderPaths(this.app, root);
 		const last = loadLastChoices(this.app);
-		this.deck = last.deck !== null && decks.includes(last.deck) ? last.deck : root;
+		this.deck =
+			this.initialDeck !== null && decks.includes(this.initialDeck)
+				? this.initialDeck
+				: last.deck !== null && decks.includes(last.deck)
+					? last.deck
+					: root;
 		this.kind = last.kind;
 		this.reverse = last.reverse;
 
@@ -184,6 +191,8 @@ export class AddCardModal extends Modal {
 				kind: this.kind,
 				reverse: this.reverse,
 			} satisfies LastChoices);
+			await this.onCreated();
+			new Notice(STRINGS.notices.cardCreated);
 			if (continueAdding) {
 				this.clearFields();
 				this.updateContinueState();

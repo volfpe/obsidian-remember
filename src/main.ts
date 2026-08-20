@@ -65,7 +65,15 @@ export default class RememberPlugin extends Plugin {
 	}
 
 	openAddCard(): void {
-		new AddCardModal(this.app, this.settings).open();
+		new AddCardModal(this.app, this.settings, null, () => this.refreshOpenReview()).open();
+	}
+
+	private async refreshOpenReview(): Promise<void> {
+		const views = this.app.workspace
+			.getLeavesOfType(REMEMBER_VIEW_DEFINITION.type)
+			.map((leaf) => leaf.view)
+			.filter((view): view is ReviewView => view instanceof ReviewView);
+		await Promise.all(views.map((view) => view.refresh()));
 	}
 
 	async loadSettings(): Promise<void> {

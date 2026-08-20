@@ -63,6 +63,12 @@ button.remember-back-to-decks.is-hidden {
 	align-items: center;
 }
 
+.remember-add-card-modal select:not(:disabled),
+.remember-add-card-modal input[type='checkbox']:not(:disabled),
+.remember-add-card-modal button:not(:disabled) {
+	cursor: pointer;
+}
+
 .remember-add-card-modal .remember-add-card-option {
 	padding-block: 10px;
 }
@@ -152,6 +158,35 @@ button.remember-view-nav-item,
 button.remember-back-to-decks,
 button.remember-session-back {
 	cursor: pointer;
+}
+
+button.remember-new-card-header {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 6px;
+	height: 30px;
+	margin-left: auto;
+	padding: 4px 9px;
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+}
+
+button.remember-new-card-header.is-hidden {
+	display: none;
+}
+
+button.remember-new-card-header:not(.is-hidden) + button.remember-refresh {
+	margin-left: 0;
+}
+
+.remember-new-card-header-icon {
+	display: inline-flex;
+}
+
+.remember-new-card-header-icon svg {
+	width: 15px;
+	height: 15px;
 }
 
 @keyframes remember-spin {
@@ -305,6 +340,22 @@ button.remember-view-nav-item.is-active {
 	min-height: 0;
 	overflow-y: auto;
 	padding: 12px 14px 18px;
+}
+
+.remember-new-card-empty {
+	display: flex;
+	min-height: 100%;
+	align-items: center;
+	justify-content: center;
+}
+
+button.remember-new-card-empty-button {
+	min-width: 168px;
+	min-height: 46px;
+	padding-inline: 22px;
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	cursor: pointer;
 }
 
 .remember-deck-study-page {
@@ -1199,6 +1250,24 @@ button.remember-refresh.is-loading svg {
 }
 
 @container (width <= 600px) {
+	.remember-new-card-header-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		border: 0;
+		opacity: 0;
+		white-space: nowrap;
+	}
+
+	button.remember-new-card-header {
+		width: 30px;
+		justify-content: center;
+		padding: 4px;
+	}
+
 	.remember-import-label {
 		display: none;
 	}
