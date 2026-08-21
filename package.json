@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-remember",
-	"version": "0.0.19",
+	"version": "0.0.20",
 	"description": "Minimal, durable spaced repetition inside Obsidian.",
 	"main": "main.js",
 	"scripts": {
