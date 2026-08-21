@@ -10,7 +10,7 @@ import {
 	type NoteCard,
 } from '../core/queue';
 import { STRINGS } from '../i18n';
-import { effectiveNewCardsPerDay, type RememberSettings } from '../settings';
+import { effectiveNewCardsPerDay } from '../settings';
 import { forecastDeck } from '../statistics/forecast';
 import type { RememberSnapshot } from './remember-snapshot';
 import { renderScheduleForecast } from './statistics/schedule-forecast';
@@ -29,7 +29,6 @@ export function displayDeck(deck: string): string {
 export function renderDeckChooser(
 	parent: HTMLElement,
 	snapshot: RememberSnapshot,
-	settings: RememberSettings,
 	onSelectDeck: (deck: string) => void,
 	now = new Date(),
 	onNewCard: () => void = () => undefined,
@@ -49,7 +48,7 @@ export function renderDeckChooser(
 	const tree = buildDeckTree(snapshot.cards);
 	const statsByDeck = new Map<string, DeckCounts>();
 	const collectStats = (node: DeckNode) => {
-		statsByDeck.set(node.path, deckCounts(snapshot, settings, node.path, now));
+		statsByDeck.set(node.path, deckCounts(snapshot, node.path, now));
 		for (const child of node.children) collectStats(child);
 	};
 	collectStats(tree);
@@ -101,14 +100,14 @@ export function renderDeckChooser(
 export function renderDeckStudyPage(
 	parent: HTMLElement,
 	snapshot: RememberSnapshot,
-	settings: RememberSettings,
 	deck: string,
 	onStartReview: () => void,
 	now = new Date(),
 	onStartPractice: () => void = () => undefined,
 ): void {
 	parent.empty();
-	const counts = deckCounts(snapshot, settings, deck, now);
+	const settings = snapshot.deckSettings.resolve(deck).values;
+	const counts = deckCounts(snapshot, deck, now);
 	const ready = counts.due + counts.new;
 	const cards = snapshot.cards.filter((card) => isDescendantDeck(card.deck, deck));
 	const canPractice = hasPracticeCards(cards, snapshot.states, now, {
@@ -211,10 +210,10 @@ export function renderDeckStudyPage(
 
 function deckCounts(
 	snapshot: RememberSnapshot,
-	settings: RememberSettings,
 	deck: string,
 	now: Date,
 ): DeckCounts {
+	const settings = snapshot.deckSettings.resolve(deck).values;
 	const introducedToday = introducedTodaySiblingKeys(snapshot.events, now);
 	const reviewedToday = reviewedTodaySiblingKeys(snapshot.events, now);
 	const buriedCardIds = manuallyBuriedCardIds(snapshot.buries, now);

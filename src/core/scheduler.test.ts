@@ -1,7 +1,15 @@
 import { Rating } from 'ts-fsrs';
 import { describe, expect, it } from 'vitest';
 import type { ReviewEvent } from './events';
-import { applyRating, foldEvents, formatInterval, makeFsrs, previewDue, siblingKey } from './scheduler';
+import {
+	applyRating,
+	foldEvents,
+	foldEventsByRetention,
+	formatInterval,
+	makeFsrs,
+	previewDue,
+	siblingKey,
+} from './scheduler';
 
 const f = makeFsrs(0.9);
 
@@ -53,6 +61,21 @@ describe('foldEvents', () => {
 
 		expect(foldEvents(f, events, 'review').get(siblingKey('card1', 0))).toEqual(expected);
 		expect(foldEvents(f, events, 'current').get(siblingKey('card1', 0))).not.toEqual(expected);
+	});
+
+	it('uses the current retention resolved for each card', () => {
+		const events = [
+			event('2026-01-01T10:00:00.000Z', Rating.Good, 'lower'),
+			event('2026-01-01T10:00:00.000Z', Rating.Good, 'higher'),
+		];
+		const states = foldEventsByRetention(events, (cardId) => (cardId === 'lower' ? 0.8 : 0.95));
+
+		expect(states.get(siblingKey('lower', 0))).toEqual(
+			applyRating(makeFsrs(0.8), null, new Date(events[0].t), Rating.Good),
+		);
+		expect(states.get(siblingKey('higher', 0))).toEqual(
+			applyRating(makeFsrs(0.95), null, new Date(events[1].t), Rating.Good),
+		);
 	});
 });
 

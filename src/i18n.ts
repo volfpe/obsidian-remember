@@ -109,6 +109,7 @@ export const STRINGS = {
 		tabs: {
 			study: 'Study',
 			cards: 'Cards',
+			deckSettings: 'Settings',
 			statistics: 'Statistics',
 		},
 		refresh: 'Refresh Remember data',
@@ -120,6 +121,12 @@ export const STRINGS = {
 		placeholders: {
 			statistics: 'Detailed review statistics will live here.',
 		},
+	},
+	deckSettings: {
+		enabled: 'On',
+		disabled: 'Off',
+		globalSource: 'From global settings',
+		deckSource: (path: string) => `From ${path}`,
 	},
 	cards: {
 		empty: 'No cards found.',

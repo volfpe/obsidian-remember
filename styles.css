@@ -226,6 +226,63 @@ button.remember-import {
 	display: none;
 }
 
+.remember-deck-settings-page {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 10px;
+	overflow-y: auto;
+}
+
+.remember-deck-settings-list {
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+}
+
+.remember-deck-setting {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: center;
+	padding: 9px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.remember-deck-setting:last-child {
+	border-bottom: 0;
+}
+
+.remember-deck-setting-name,
+.remember-deck-setting-value {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.remember-deck-setting-description,
+.remember-deck-setting-source {
+	margin-top: 3px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.remember-deck-setting-result {
+	min-width: 130px;
+	text-align: right;
+}
+
+@media (width <= 480px) {
+	.remember-deck-setting {
+		grid-template-columns: 1fr;
+		gap: 8px;
+	}
+
+	.remember-deck-setting-result {
+		min-width: 0;
+		text-align: left;
+	}
+}
+
 button.remember-back-to-decks {
 	flex: 0 0 auto;
 }

@@ -137,7 +137,7 @@ describe('Remember shell', () => {
 		const tabs = Array.from(
 			view.contentEl.querySelectorAll<HTMLButtonElement>('.remember-view-nav-item'),
 		);
-		expect(tabs.map((tab) => tab.textContent)).toEqual(['Study', 'Cards']);
+		expect(tabs.map((tab) => tab.textContent)).toEqual(['Study', 'Cards', 'Settings']);
 		expect(tabs[0].getAttribute('aria-current')).toBe('page');
 		expect(view.contentEl.querySelector('.remember-view-title')?.textContent).toBe(
 			'Remember/Spanish',
@@ -171,6 +171,77 @@ describe('Remember shell', () => {
 			'No cards found.',
 		);
 		expect(load).not.toHaveBeenCalled();
+	});
+
+	it('loads inherited deck settings and shows each value source', async () => {
+		const rootSettings = [
+			'---',
+			'remember-bury-siblings: false',
+			'---',
+			'',
+			'# Front',
+			'',
+			'This settings note is not a card.',
+			'',
+			'# Back',
+			'',
+			'Never adopt it.',
+			'',
+		].join('\n');
+		const mockApp = App.createConfigured__({
+			files: {
+				'Remember/_remember.md': rootSettings,
+				'Remember/Language/_remember.md':
+					'---\nremember-desired-retention: 0.95\nremember-new-cards-per-day: nope\n---\n',
+				'Remember/Language/Spanish/_remember.md':
+					'---\nremember-new-cards-per-day: 5\n---\n',
+				'Remember/Language/Spanish/hola.md': cardNote('hola', 'hello'),
+			},
+		});
+		const app = mockApp.asOriginalType__();
+		const leaf = WorkspaceLeaf.create2__(mockApp).asOriginalType3__();
+		const view = new ReviewView(leaf, { ...DEFAULT_SETTINGS });
+
+		await view.onOpen();
+		(view as unknown as { selectDeck(deck: string): void }).selectDeck('Language/Spanish');
+		const tabs = Array.from(
+			view.contentEl.querySelectorAll<HTMLButtonElement>('.remember-view-nav-item'),
+		);
+		tabs[2].click();
+
+		const page = view.contentEl.querySelector('.remember-deck-settings-page');
+		expect(page?.textContent).toContain(
+			'Desired retentionFSRS target recall probability. Higher means shorter intervals.95%From Remember/Language/_remember.md',
+		);
+		expect(page?.textContent).toContain('New cards per day');
+		expect(page?.textContent).toContain('5From Remember/Language/Spanish/_remember.md');
+		expect(page?.textContent).toContain('Bury sibling cards');
+		expect(page?.textContent).toContain('OffFrom Remember/_remember.md');
+		expect(page?.textContent).toContain('Learn ahead');
+		expect(page?.textContent).toContain('OnFrom global settings');
+		expect(await app.vault.adapter.read('Remember/_remember.md')).toBe(rootSettings);
+	});
+
+	it('applies settings from the selected deck to its study page', async () => {
+		const mockApp = App.createConfigured__({
+			files: {
+				'Remember/Language/_remember.md':
+					'---\nremember-limit-new-cards-per-day: true\nremember-new-cards-per-day: 0\n---\n',
+				'Remember/Language/hola.md': cardNote('hola', 'hello'),
+			},
+		});
+		const leaf = WorkspaceLeaf.create2__(mockApp).asOriginalType3__();
+		const view = new ReviewView(leaf, { ...DEFAULT_SETTINGS });
+
+		await view.onOpen();
+		(view as unknown as { selectDeck(deck: string): void }).selectDeck('Language');
+
+		expect(view.contentEl.querySelector('.remember-deck-readiness')?.textContent).toBe(
+			'No cards to review',
+		);
+		expect(view.contentEl.querySelector('.remember-deck-status-waiting')?.textContent).toBe(
+			'1Waiting',
+		);
 	});
 
 	it('reloads the shared snapshot from the header refresh action', async () => {

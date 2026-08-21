@@ -2,6 +2,7 @@ import { Rating, State, type Card as FsrsCard } from 'ts-fsrs';
 import { describe, expect, it } from 'vitest';
 import type { ReviewEvent } from '../../core/events';
 import type { NoteCard } from '../../core/queue';
+import { DeckSettingsIndex } from '../../deck-settings';
 import { DEFAULT_SETTINGS } from '../../settings';
 import type { RememberSnapshot } from '../remember-snapshot';
 import { buildCardDeckGroups, cardStateKind } from './cards-model';
@@ -41,6 +42,7 @@ function snapshot(cards: NoteCard[], events: ReviewEvent[] = []): RememberSnapsh
 		events,
 		buries: [],
 		states: new Map([['card-one#0', reviewState()]]),
+		deckSettings: new DeckSettingsIndex(DEFAULT_SETTINGS),
 		issues: { duplicates: [] },
 	};
 }
@@ -70,7 +72,6 @@ describe('Cards catalog', () => {
 		const groups = buildCardDeckGroups(
 			snapshot(cards, events),
 			'Language',
-			{ ...DEFAULT_SETTINGS },
 			new Date('2026-08-15T12:00:00.000Z'),
 		);
 
@@ -99,7 +100,6 @@ describe('Cards catalog', () => {
 		const item = buildCardDeckGroups(
 			snapshot(cards),
 			'Geography',
-			{ ...DEFAULT_SETTINGS },
 			new Date('2026-08-15T12:00:00.000Z'),
 		)[0].items[0];
 
@@ -126,11 +126,15 @@ describe('Cards catalog', () => {
 			},
 		]);
 		data.states.clear();
+		data.deckSettings = new DeckSettingsIndex({
+			...DEFAULT_SETTINGS,
+			limitNewCardsPerDay: true,
+			newCardsPerDay: 0,
+		});
 
 		const groups = buildCardDeckGroups(
 			data,
 			'Language',
-			{ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 },
 			new Date('2026-08-15T12:00:00.000Z'),
 		);
 
@@ -164,7 +168,6 @@ describe('Cards catalog', () => {
 		const groups = buildCardDeckGroups(
 			snapshot(cards),
 			'Language',
-			{ ...DEFAULT_SETTINGS },
 			new Date('2026-08-15T12:00:00.000Z'),
 		);
 
@@ -186,7 +189,6 @@ describe('Cards catalog', () => {
 		const groups = buildCardDeckGroups(
 			{ ...snapshot([suspended]), states: new Map() },
 			'Language',
-			{ ...DEFAULT_SETTINGS },
 			new Date('2026-08-15T12:00:00.000Z'),
 		);
 

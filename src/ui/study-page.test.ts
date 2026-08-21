@@ -2,13 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { Rating } from 'ts-fsrs';
 import type { NoteCard } from '../core/queue';
 import { foldEvents, makeFsrs } from '../core/scheduler';
+import { DeckSettingsIndex } from '../deck-settings';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { RememberSnapshot } from './remember-snapshot';
 import { renderDeckChooser, renderDeckStudyPage } from './study-page';
 
 const now = new Date('2026-08-15T12:00:00.000Z');
 
-function snapshot(): RememberSnapshot {
+function snapshot(settings = { ...DEFAULT_SETTINGS }): RememberSnapshot {
 	const cards: NoteCard[] = [
 		{
 			id: null,
@@ -27,6 +28,7 @@ function snapshot(): RememberSnapshot {
 		events: [],
 		buries: [],
 		states: new Map(),
+		deckSettings: new DeckSettingsIndex(settings),
 		issues: { duplicates: [] },
 	};
 }
@@ -38,7 +40,7 @@ describe('deck-first study pages', () => {
 		const data = snapshot();
 		data.cards = [];
 
-		renderDeckChooser(parent, data, { ...DEFAULT_SETTINGS }, vi.fn(), now, newCard);
+		renderDeckChooser(parent, data, vi.fn(), now, newCard);
 
 		const button = parent.querySelector<HTMLButtonElement>('.remember-new-card-empty-button');
 		expect(button?.textContent).toBe('New card');
@@ -52,8 +54,7 @@ describe('deck-first study pages', () => {
 		const selectDeck = vi.fn();
 		renderDeckChooser(
 			parent,
-			snapshot(),
-			{ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 },
+			snapshot({ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 }),
 			selectDeck,
 			now,
 		);
@@ -81,7 +82,7 @@ describe('deck-first study pages', () => {
 		data.cards[0].suspended = true;
 		data.cards[0].siblings.push({ sub: 1, front: 'hello', back: 'hola' });
 
-		renderDeckChooser(parent, data, { ...DEFAULT_SETTINGS }, vi.fn(), now);
+		renderDeckChooser(parent, data, vi.fn(), now);
 
 		expect(parent.querySelector('.remember-deck-header-count-suspended')?.textContent).toBe(
 			'Suspended',
@@ -93,7 +94,7 @@ describe('deck-first study pages', () => {
 			'excluded from review',
 		);
 
-		renderDeckStudyPage(parent, data, { ...DEFAULT_SETTINGS }, 'Language', vi.fn(), now);
+		renderDeckStudyPage(parent, data, 'Language', vi.fn(), now);
 
 		expect(parent.querySelector('.remember-deck-status-suspended')?.textContent).toBe('2Suspended');
 		expect(parent.querySelector('.remember-start-review')).toBeNull();
@@ -105,7 +106,6 @@ describe('deck-first study pages', () => {
 		renderDeckStudyPage(
 			parent,
 			snapshot(),
-			{ ...DEFAULT_SETTINGS },
 			'Language',
 			start,
 			now,
@@ -125,8 +125,7 @@ describe('deck-first study pages', () => {
 
 		renderDeckStudyPage(
 			parent,
-			snapshot(),
-			{ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 },
+			snapshot({ ...DEFAULT_SETTINGS, limitNewCardsPerDay: true, newCardsPerDay: 0 }),
 			'Language',
 			start,
 			now,
@@ -157,7 +156,6 @@ describe('deck-first study pages', () => {
 		renderDeckStudyPage(
 			parent,
 			data,
-			{ ...DEFAULT_SETTINGS },
 			'Language',
 			vi.fn(),
 			now,
@@ -185,7 +183,6 @@ describe('deck-first study pages', () => {
 		renderDeckStudyPage(
 			parent,
 			data,
-			{ ...DEFAULT_SETTINGS },
 			'Language',
 			vi.fn(),
 			now,

@@ -12,7 +12,13 @@ import {
 import type { BuryEvent, ReviewEvent } from '../core/events';
 import { newCardId } from '../core/id';
 import { selectCards, type NoteCard } from '../core/queue';
-import { foldEvents, makeFsrs } from '../core/scheduler';
+import { foldEventsByRetention } from '../core/scheduler';
+import {
+	DeckSettingsIndex,
+	isDeckSettingsPath,
+	parseDeckSettings,
+	type DeckSettingsOverride,
+} from '../deck-settings';
 import type { RememberSettings } from '../settings';
 import { parentPath } from '../vault-folders';
 
@@ -26,6 +32,7 @@ export interface RememberSnapshot {
 	events: ReviewEvent[];
 	buries: BuryEvent[];
 	states: Map<string, FsrsCard>;
+	deckSettings: DeckSettingsIndex;
 	issues: RememberSnapshotIssues;
 }
 
@@ -49,24 +56,30 @@ export class RememberSnapshotRepository {
 	) {}
 
 	async load(): Promise<RememberSnapshot> {
+		const files = this.app.vault.getMarkdownFiles();
+		const deckSettings = this.scanDeckSettings(files);
 		const [cards, cardEvents] = await Promise.all([
-			this.scanCards(),
+			this.scanCards(files),
 			readCardEvents(this.app, this.settings.rootFolder),
 		]);
 		const events = cardEvents.filter((event): event is ReviewEvent => event.k === 'r');
 		const buries = cardEvents.filter((event): event is BuryEvent => event.k === 'b');
 		const selection = selectCards(cards);
-		const fsrs = makeFsrs(this.settings.desiredRetention);
+		const decksByCardId = new Map(
+			selection.kept.flatMap((card) => (card.id === null ? [] : [[card.id, card.deck] as const])),
+		);
 		return {
 			loadedAt: new Date(),
 			cards: selection.kept,
 			events,
 			buries,
-			states: foldEvents(
-				fsrs,
+			states: foldEventsByRetention(
 				events,
+				(cardId) =>
+					deckSettings.resolve(decksByCardId.get(cardId) ?? '').values.desiredRetention,
 				this.settings.rescheduleOnRetentionChange ? 'current' : 'review',
 			),
+			deckSettings,
 			issues: {
 				duplicates: selection.dropped,
 			},
@@ -78,11 +91,12 @@ export class RememberSnapshotRepository {
 	 * cards are left untouched; incomplete cards (no siblings yet) are adopted but
 	 * produce nothing to review until the user finishes them.
 	 */
-	private async scanCards(): Promise<NoteCard[]> {
+	private async scanCards(files: TFile[]): Promise<NoteCard[]> {
 		const root = this.settings.rootFolder;
 		const cards: NoteCard[] = [];
-		for (const file of this.app.vault.getMarkdownFiles()) {
+		for (const file of files) {
 			if (!isUnderFolder(file.path, root)) continue;
+			if (isDeckSettingsPath(file.path)) continue;
 			let parsed: ParsedCardNote;
 			try {
 				parsed = await this.parseFile(file);
@@ -105,6 +119,22 @@ export class RememberSnapshotRepository {
 			});
 		}
 		return cards;
+	}
+
+	private scanDeckSettings(files: TFile[]): DeckSettingsIndex {
+		const root = this.settings.rootFolder;
+		const overrides = new Map<string, DeckSettingsOverride>();
+		const paths = new Map<string, string>();
+		for (const file of files) {
+			if (!isUnderFolder(file.path, root) || !isDeckSettingsPath(file.path)) continue;
+			const deck = deckOfPath(file.path, root);
+			overrides.set(
+				deck,
+				parseDeckSettings(this.app.metadataCache.getFileCache(file)?.frontmatter),
+			);
+			paths.set(deck, file.path);
+		}
+		return new DeckSettingsIndex(this.settings, overrides, paths);
 	}
 
 	private async parseFile(file: TFile, frontmatter?: Record<string, unknown>): Promise<ParsedCardNote> {

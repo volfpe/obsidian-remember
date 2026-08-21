@@ -4,6 +4,7 @@ import { STRINGS } from '../i18n';
 import type { RememberSettings } from '../settings';
 import { AddCardModal } from './add-card-modal';
 import { CardsPage } from './cards/cards-page';
+import { renderDeckSettingsPage } from './deck-settings-page';
 import { REMEMBER_VIEW_DEFINITION } from './remember-view-definition';
 import {
 	RememberSnapshotRepository,
@@ -12,7 +13,7 @@ import {
 import { ReviewSession } from './review-session';
 import { displayDeck, renderDeckChooser, renderDeckStudyPage } from './study-page';
 
-type RememberSection = 'study' | 'cards' | 'statistics';
+type RememberSection = 'study' | 'cards' | 'deck-settings' | 'statistics';
 const IMPORT_ENABLED = false;
 const STATISTICS_TAB_ENABLED = false;
 
@@ -168,6 +169,7 @@ export class ReviewView extends ItemView {
 		const sections: [RememberSection, string][] = [
 			['study', STRINGS.study.tabs.study],
 			['cards', STRINGS.study.tabs.cards],
+			['deck-settings', STRINGS.study.tabs.deckSettings],
 		];
 		if (STATISTICS_TAB_ENABLED) {
 			sections.push(['statistics', STRINGS.study.tabs.statistics]);
@@ -229,7 +231,6 @@ export class ReviewView extends ItemView {
 			renderDeckChooser(
 				this.body,
 				snapshot,
-				this.settings,
 				(selected) => this.selectDeck(selected),
 				snapshot.loadedAt,
 				() => this.openNewCard(''),
@@ -240,7 +241,6 @@ export class ReviewView extends ItemView {
 			renderDeckStudyPage(
 				this.body,
 				snapshot,
-				this.settings,
 				deck,
 				() => void this.startSession(),
 				snapshot.loadedAt,
@@ -249,7 +249,11 @@ export class ReviewView extends ItemView {
 			return;
 		}
 		if (this.section === 'cards') {
-			this.cardsPage?.render(this.body, snapshot, deck, this.settings);
+			this.cardsPage?.render(this.body, snapshot, deck);
+			return;
+		}
+		if (this.section === 'deck-settings') {
+			renderDeckSettingsPage(this.body, snapshot.deckSettings, deck);
 			return;
 		}
 		this.body.empty();

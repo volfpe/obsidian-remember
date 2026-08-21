@@ -33,6 +33,18 @@ export function normalizeRootFolder(value: string): string {
 	return segments.join('/');
 }
 
+export function isDesiredRetention(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value) && value >= 0.7 && value <= 0.99;
+}
+
+export function isNewCardsPerDay(value: unknown): value is number {
+	return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 9999;
+}
+
+export function isLearnAheadMinutes(value: unknown): value is number {
+	return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 1440;
+}
+
 export function parseSettings(value: unknown): RememberSettings {
 	if (typeof value !== 'object' || value === null) return { ...DEFAULT_SETTINGS };
 	const stored = value as Record<string, unknown>;
@@ -52,36 +64,31 @@ export function parseSettings(value: unknown): RememberSettings {
 				? stored.limitNewCardsPerDay
 				: DEFAULT_SETTINGS.limitNewCardsPerDay,
 		newCardsPerDay:
-			typeof stored.newCardsPerDay === 'number' &&
-			Number.isInteger(stored.newCardsPerDay) &&
-			stored.newCardsPerDay >= 0 &&
-			stored.newCardsPerDay <= 9999
+			isNewCardsPerDay(stored.newCardsPerDay)
 				? stored.newCardsPerDay
 				: DEFAULT_SETTINGS.newCardsPerDay,
 		learnAhead:
 			typeof stored.learnAhead === 'boolean' ? stored.learnAhead : DEFAULT_SETTINGS.learnAhead,
 		learnAheadMinutes:
-			typeof stored.learnAheadMinutes === 'number' &&
-			Number.isInteger(stored.learnAheadMinutes) &&
-			stored.learnAheadMinutes >= 1 &&
-			stored.learnAheadMinutes <= 1440
+			isLearnAheadMinutes(stored.learnAheadMinutes)
 				? stored.learnAheadMinutes
 				: DEFAULT_SETTINGS.learnAheadMinutes,
 		desiredRetention:
-			typeof stored.desiredRetention === 'number' &&
-			Number.isFinite(stored.desiredRetention) &&
-			stored.desiredRetention >= 0.7 &&
-			stored.desiredRetention <= 0.99
+			isDesiredRetention(stored.desiredRetention)
 				? stored.desiredRetention
 				: DEFAULT_SETTINGS.desiredRetention,
 	};
 }
 
-export function effectiveNewCardsPerDay(settings: RememberSettings): number {
+export function effectiveNewCardsPerDay(
+	settings: Pick<RememberSettings, 'limitNewCardsPerDay' | 'newCardsPerDay'>,
+): number {
 	return settings.limitNewCardsPerDay ? settings.newCardsPerDay : Number.POSITIVE_INFINITY;
 }
 
-export function effectiveLearnAheadMinutes(settings: RememberSettings): number | null {
+export function effectiveLearnAheadMinutes(
+	settings: Pick<RememberSettings, 'learnAhead' | 'learnAheadMinutes'>,
+): number | null {
 	return settings.learnAhead ? settings.learnAheadMinutes : null;
 }
 
@@ -226,25 +233,13 @@ export class RememberSettingTab extends PluginSettingTab {
 			this.plugin.settings.burySiblings = value;
 		} else if (key === 'limitNewCardsPerDay' && typeof value === 'boolean') {
 			this.plugin.settings.limitNewCardsPerDay = value;
-		} else if (
-			key === 'newCardsPerDay' &&
-			typeof value === 'number' &&
-			Number.isInteger(value) &&
-			value >= 0 &&
-			value <= 9999
-		) {
+		} else if (key === 'newCardsPerDay' && isNewCardsPerDay(value)) {
 			this.plugin.settings.newCardsPerDay = value;
-		} else if (key === 'desiredRetention' && typeof value === 'number') {
+		} else if (key === 'desiredRetention' && isDesiredRetention(value)) {
 			this.plugin.settings.desiredRetention = value;
 		} else if (key === 'learnAhead' && typeof value === 'boolean') {
 			this.plugin.settings.learnAhead = value;
-		} else if (
-			key === 'learnAheadMinutes' &&
-			typeof value === 'number' &&
-			Number.isInteger(value) &&
-			value >= 1 &&
-			value <= 1440
-		) {
+		} else if (key === 'learnAheadMinutes' && isLearnAheadMinutes(value)) {
 			this.plugin.settings.learnAheadMinutes = value;
 		} else {
 			return;

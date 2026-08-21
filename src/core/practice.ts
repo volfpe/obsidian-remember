@@ -51,6 +51,7 @@ function* eligiblePracticeItems(
 			yield {
 				path: card.path,
 				line: card.line,
+				deck: card.deck,
 				cardId: card.id,
 				sub: sibling.sub,
 				front: sibling.front,

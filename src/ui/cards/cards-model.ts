@@ -10,7 +10,7 @@ import {
 	type CardAvailability,
 } from '../../core/queue';
 import { siblingKey } from '../../core/scheduler';
-import { effectiveNewCardsPerDay, type RememberSettings } from '../../settings';
+import { effectiveNewCardsPerDay } from '../../settings';
 import type { RememberSnapshot } from '../remember-snapshot';
 
 export interface CardListItem {
@@ -35,9 +35,9 @@ export interface CardDeckGroup {
 export function buildCardDeckGroups(
 	snapshot: RememberSnapshot,
 	selectedDeck: string,
-	settings: RememberSettings,
 	now = new Date(),
 ): CardDeckGroup[] {
+	const settings = snapshot.deckSettings.resolve(selectedDeck).values;
 	const cards = snapshot.cards.filter((card) => isDescendantDeck(card.deck, selectedDeck));
 	const availability = classifyDeckSiblings(cards, snapshot.states, now, {
 		introducedToday: introducedTodaySiblingKeys(snapshot.events, now),

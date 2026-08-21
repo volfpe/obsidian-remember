@@ -2,6 +2,7 @@ import { App } from 'obsidian-test-mocks/obsidian';
 import { State, type Card as FsrsCard } from 'ts-fsrs';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import type { NoteCard } from '../../core/queue';
+import { DeckSettingsIndex } from '../../deck-settings';
 import { DEFAULT_SETTINGS } from '../../settings';
 import type { RememberSnapshot } from '../remember-snapshot';
 import { CardsPage } from './cards-page';
@@ -28,6 +29,7 @@ function snapshot(): RememberSnapshot {
 		events: [],
 		buries: [],
 		states: new Map(),
+		deckSettings: new DeckSettingsIndex(DEFAULT_SETTINGS),
 		issues: { duplicates: [] },
 	};
 }
@@ -56,7 +58,7 @@ describe('Cards page', () => {
 		const page = new CardsPage(app);
 		const container = createDiv();
 
-		page.render(container, snapshot(), 'Language', { ...DEFAULT_SETTINGS });
+		page.render(container, snapshot(), 'Language');
 
 		const rows = Array.from(container.querySelectorAll<HTMLButtonElement>('.remember-card-row'));
 		const list = container.querySelector<HTMLElement>('.remember-card-list');
@@ -113,7 +115,7 @@ describe('Cards page', () => {
 		};
 		data.states.set('first-card#0', dueState);
 
-		page.render(container, data, 'Language', { ...DEFAULT_SETTINGS });
+		page.render(container, data, 'Language');
 
 		expect(container.querySelector('.remember-card-row .remember-card-due')?.textContent).toBe('Now');
 		expect(container.querySelector('.remember-card-metadata')?.textContent).toContain('DueNow');

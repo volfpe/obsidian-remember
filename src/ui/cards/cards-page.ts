@@ -8,7 +8,6 @@ import {
 import { Rating, type Grade } from 'ts-fsrs';
 import { formatInterval } from '../../core/scheduler';
 import { STRINGS } from '../../i18n';
-import type { RememberSettings } from '../../settings';
 import type { RememberSnapshot } from '../remember-snapshot';
 import { openCardDefinition } from '../open-card-definition';
 import {
@@ -35,11 +34,10 @@ export class CardsPage {
 		parent: HTMLElement,
 		snapshot: RememberSnapshot,
 		selectedDeck: string,
-		settings: RememberSettings,
 	): void {
 		this.parent = parent;
 		this.now = new Date();
-		this.groups = buildCardDeckGroups(snapshot, selectedDeck, settings, this.now);
+		this.groups = buildCardDeckGroups(snapshot, selectedDeck, this.now);
 		const items = this.groups.flatMap((group) => group.items);
 		if (!items.some((item) => item.key === this.selectedKey)) {
 			this.selectedKey = items[0]?.key ?? null;

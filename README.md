@@ -66,6 +66,23 @@ Card frontmatter uses the following properties:
 - `remember-reverse` — whether a basic card also appears in the reverse direction
 - `remember-suspend` — whether the card is excluded from reviews
 
+## Deck settings
+
+Add an optional `_remember.md` note to a deck folder to override settings for that deck. Put the settings in the note's frontmatter.
+
+```yaml
+---
+remember-desired-retention: 0.95
+remember-limit-new-cards-per-day: true
+remember-new-cards-per-day: 10
+remember-bury-siblings: false
+remember-learn-ahead: true
+remember-learn-ahead-minutes: 5
+---
+```
+
+Missing settings come from the closest parent deck. Global Remember settings are used when no deck overrides them.
+
 ## Multi-device sync
 
 When using Obsidian Sync, enable **Settings → Sync → Selective sync → Sync all other types** on every device.

@@ -36,6 +36,7 @@ export interface NoteCard {
 export interface QueueItem {
 	path: string;
 	line: number;
+	deck: string;
 	cardId: string;
 	/** Stable sibling index supplied by the parsed card. */
 	sub: number;
@@ -398,6 +399,7 @@ export function buildQueue(
 		const item: QueueItem = {
 			path: sibling.card.path,
 			line: sibling.card.line,
+			deck: sibling.card.deck,
 			cardId,
 			sub: sibling.sub,
 			front: sibling.front,

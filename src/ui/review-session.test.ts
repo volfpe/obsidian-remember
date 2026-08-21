@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PracticeSessionQueue } from '../core/practice';
 import type { QueueItem } from '../core/queue';
 import { applyRating, makeFsrs } from '../core/scheduler';
+import { DeckSettingsIndex } from '../deck-settings';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { RememberSettings } from '../settings';
 import { ReviewSession } from './review-session';
@@ -12,6 +13,7 @@ interface ReviewSessionHarness {
 	busy: boolean;
 	container: HTMLElement | null;
 	current: QueueItem | null;
+	deckSettings: DeckSettingsIndex;
 	leave(): Promise<void>;
 	phase: 'idle' | 'question' | 'answer';
 	mode: 'review' | 'practice';
@@ -31,6 +33,7 @@ function item(cardId: string): QueueItem {
 	return {
 		path: 'note.md',
 		line: 0,
+		deck: '',
 		cardId,
 		sub: 0,
 		front: `front of ${cardId}`,
@@ -48,17 +51,16 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 	return { promise, resolve };
 }
 
-function makeHarness(): {
+function makeHarness(overrides: Partial<RememberSettings> = {}): {
 	app: ReturnType<App['asOriginalType__']>;
 	finished: ReturnType<typeof vi.fn>;
-	settings: RememberSettings;
 	session: ReviewSessionHarness;
 } {
 	const noteContent = ['---', 'remember-id: first', 'remember-type: basic', '---', '', '# Front', '', 'q', '', '# Back', '', 'a', ''].join('\n');
 	const mockApp = App.createConfigured__({ files: { 'note.md': noteContent } });
 	mockApp.saveLocalStorage('remember-device-id', 'device0000001');
 	const app = mockApp.asOriginalType__();
-	const settings = { ...DEFAULT_SETTINGS };
+	const settings = { ...DEFAULT_SETTINGS, ...overrides };
 	const finished = vi.fn(async () => undefined);
 	const actual = new ReviewSession(app, settings, finished);
 	actual.load();
@@ -67,15 +69,31 @@ function makeHarness(): {
 	session.current = item('first');
 	session.queue = [item('second')];
 	session.phase = 'answer';
-	return { app, finished, settings, session };
+	return { app, finished, session };
 }
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('rating durability', () => {
-	it('records the current retention after settings change', async () => {
-		const { app, settings, session } = makeHarness();
-		settings.desiredRetention = 0.95;
+	it('records the loaded retention', async () => {
+		const { app, session } = makeHarness({ desiredRetention: 0.95 });
+
+		await session.rate(Rating.Easy);
+
+		const [event] = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		expect(event.dr).toBe(0.95);
+	});
+
+	it('records retention from the card deck', async () => {
+		const { app, session } = makeHarness();
+		session.current = { ...item('first'), deck: 'Language/Spanish' };
+		session.deckSettings = new DeckSettingsIndex(
+			DEFAULT_SETTINGS,
+			new Map([['Language', { desiredRetention: 0.95 }]]),
+		);
 
 		await session.rate(Rating.Easy);
 
@@ -132,8 +150,7 @@ describe('session progress', () => {
 	});
 
 	it('completes a short-delay card when learn ahead is disabled', async () => {
-		const { settings, session } = makeHarness();
-		settings.learnAhead = false;
+		const { session } = makeHarness({ learnAhead: false });
 
 		await session.rate(Rating.Good);
 
@@ -143,8 +160,7 @@ describe('session progress', () => {
 	});
 
 	it('completes a card whose delay exceeds a custom learn-ahead limit', async () => {
-		const { settings, session } = makeHarness();
-		settings.learnAheadMinutes = 5;
+		const { session } = makeHarness({ learnAheadMinutes: 5 });
 
 		await session.rate(Rating.Good);
 

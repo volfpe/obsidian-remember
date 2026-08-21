@@ -20,18 +20,27 @@ export function foldEvents(
 	events: ReviewEvent[],
 	retentionReplay: RetentionReplayMode = 'current',
 ): Map<string, FsrsCard> {
+	return foldEventsByRetention(events, () => f.parameters.request_retention, retentionReplay, f);
+}
+
+/** Replays with the current desired retention resolved independently for each card. */
+export function foldEventsByRetention(
+	events: ReviewEvent[],
+	desiredRetention: (cardId: string) => number,
+	retentionReplay: RetentionReplayMode = 'current',
+	seed?: FSRS,
+): Map<string, FsrsCard> {
 	const states = new Map<string, FsrsCard>();
-	const schedulers = new Map<number, FSRS>([[f.parameters.request_retention, f]]);
+	const schedulers = new Map<number, FSRS>();
+	if (seed) schedulers.set(seed.parameters.request_retention, seed);
 	const sorted = [...events].sort((a, b) =>
 		a.t < b.t ? -1 : a.t > b.t ? 1 : a.i < b.i ? -1 : a.i > b.i ? 1 : 0,
 	);
 	for (const event of sorted) {
 		const key = siblingKey(event.c, event.s);
-		let scheduler = f;
-		if (retentionReplay === 'review') {
-			scheduler = schedulers.get(event.dr) ?? makeFsrs(event.dr);
-			schedulers.set(event.dr, scheduler);
-		}
+		const retention = retentionReplay === 'review' ? event.dr : desiredRetention(event.c);
+		const scheduler = schedulers.get(retention) ?? makeFsrs(retention);
+		schedulers.set(retention, scheduler);
 		states.set(key, applyRating(scheduler, states.get(key) ?? null, new Date(event.t), event.r));
 	}
 	return states;

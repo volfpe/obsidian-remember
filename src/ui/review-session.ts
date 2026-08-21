@@ -29,6 +29,7 @@ import {
 } from '../core/queue';
 import { applyRating, formatInterval, makeFsrs, previewDue } from '../core/scheduler';
 import { STRINGS } from '../i18n';
+import { DeckSettingsIndex, type DeckSettings } from '../deck-settings';
 import {
 	effectiveLearnAheadMinutes,
 	effectiveNewCardsPerDay,
@@ -60,6 +61,8 @@ export class ReviewSession extends Component {
 	private progressEl: HTMLElement | null = null;
 	private progressCurrentEl: HTMLElement | null = null;
 	private busy = false;
+	private deckSettings: DeckSettingsIndex;
+	private sessionSettings: DeckSettings;
 
 	constructor(
 		private app: App,
@@ -67,6 +70,8 @@ export class ReviewSession extends Component {
 		private onFinish: () => Promise<void>,
 	) {
 		super();
+		this.deckSettings = new DeckSettingsIndex(settings);
+		this.sessionSettings = this.deckSettings.resolve('').values;
 	}
 
 	get active(): boolean {
@@ -89,11 +94,13 @@ export class ReviewSession extends Component {
 		this.container = parent;
 		this.mode = 'review';
 		this.practiceQueue = null;
+		this.deckSettings = snapshot.deckSettings;
+		this.sessionSettings = snapshot.deckSettings.resolve(deck).values;
 		try {
 			const selection = selectCards(snapshot.cards, deck);
 			const { events, buries, states } = snapshot;
 			const now = snapshot.loadedAt;
-			const newCardsPerDay = effectiveNewCardsPerDay(this.settings);
+			const newCardsPerDay = effectiveNewCardsPerDay(this.sessionSettings);
 			const introducedToday = introducedTodaySiblingKeys(events, now);
 			const reviewedToday = reviewedTodaySiblingKeys(events, now);
 			const buriedCardIds = manuallyBuriedCardIds(buries, now);
@@ -102,13 +109,13 @@ export class ReviewSession extends Component {
 				reviewedToday,
 				manuallyBuriedCardIds: buriedCardIds,
 				newCardsPerDay,
-				burySiblings: this.settings.burySiblings,
+				burySiblings: this.sessionSettings.burySiblings,
 			});
 			this.queue = buildQueue(selection.kept, states, now, {
 				maxNewCards: counts.new,
 				reviewedToday,
 				manuallyBuriedCardIds: buriedCardIds,
-				burySiblings: this.settings.burySiblings,
+				burySiblings: this.sessionSettings.burySiblings,
 			});
 			this.sessionTotal = this.queue.length;
 			this.sessionCompleted = 0;
@@ -125,6 +132,8 @@ export class ReviewSession extends Component {
 		this.busy = true;
 		this.container = parent;
 		this.mode = 'practice';
+		this.deckSettings = snapshot.deckSettings;
+		this.sessionSettings = snapshot.deckSettings.resolve(deck).values;
 		try {
 			// Freeze eligibility at the instant this Practice session begins.
 			const now = new Date();
@@ -263,9 +272,9 @@ export class ReviewSession extends Component {
 		const now = new Date();
 		const previews =
 			this.mode === 'review'
-				? previewDue(makeFsrs(this.settings.desiredRetention), this.current.state, now)
+				? previewDue(makeFsrs(this.retentionFor(this.current)), this.current.state, now)
 				: null;
-		const learnAheadMinutes = effectiveLearnAheadMinutes(this.settings);
+		const learnAheadMinutes = effectiveLearnAheadMinutes(this.sessionSettings);
 		const footer = review.createDiv({ cls: 'remember-footer' });
 		const buttons = footer.createDiv({ cls: 'remember-buttons remember-rating-buttons' });
 		const ratings: [Grade, string, string][] = [
@@ -335,7 +344,7 @@ export class ReviewSession extends Component {
 		this.busy = true;
 		try {
 			const when = new Date();
-			const fsrs = makeFsrs(this.settings.desiredRetention);
+			const fsrs = makeFsrs(this.retentionFor(item));
 			const event: ReviewEvent = {
 				v: 1,
 				k: 'r',
@@ -353,7 +362,7 @@ export class ReviewSession extends Component {
 				return;
 			}
 			const next = applyRating(fsrs, item.state, when, grade);
-			const learnAheadMinutes = effectiveLearnAheadMinutes(this.settings);
+			const learnAheadMinutes = effectiveLearnAheadMinutes(this.sessionSettings);
 			const reentersSession = returnsToCurrentSession(next.due, when, learnAheadMinutes);
 			this.undoStack.push({
 				item,
@@ -469,6 +478,10 @@ export class ReviewSession extends Component {
 		const index = this.queue.findIndex((queued) => queued.showAt.getTime() > item.showAt.getTime());
 		if (index === -1) this.queue.push(item);
 		else this.queue.splice(index, 0, item);
+	}
+
+	private retentionFor(item: QueueItem): number {
+		return this.deckSettings.resolve(item.deck).values.desiredRetention;
 	}
 
 	private async finish(): Promise<void> {
