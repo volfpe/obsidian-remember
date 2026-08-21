@@ -113,6 +113,14 @@ function coerceDeckSetting(key: DeckSettingKey, value: unknown): unknown {
 	) {
 		return Number(value);
 	}
+	if (
+		(key === 'burySiblings' || key === 'limitNewCardsPerDay' || key === 'learnAhead') &&
+		typeof value === 'string'
+	) {
+		const normalized = value.trim().toLowerCase();
+		if (normalized === 'true') return true;
+		if (normalized === 'false') return false;
+	}
 	return value;
 }
 
