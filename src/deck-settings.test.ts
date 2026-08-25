@@ -11,10 +11,10 @@ describe('deck settings', () => {
 		expect(
 			parseDeckSettings({
 				'remember-desired-retention': ' 0.95 ',
-				'remember-bury-siblings': ' FALSE ',
-				'remember-limit-new-cards-per-day': 'true',
+				'remember-bury-siblings-enabled': ' FALSE ',
+				'remember-new-cards-per-day-enabled': 'true',
 				'remember-new-cards-per-day': -1,
-				'remember-learn-ahead': true,
+				'remember-learn-ahead-enabled': true,
 				'remember-learn-ahead-minutes': '5',
 			}),
 		).toEqual({
@@ -30,7 +30,7 @@ describe('deck settings', () => {
 				'remember-desired-retention': 'not a number',
 				'remember-new-cards-per-day': '2.5',
 				'remember-learn-ahead-minutes': '',
-				'remember-learn-ahead': 'not a boolean',
+				'remember-learn-ahead-enabled': 'not a boolean',
 			}),
 		).toEqual({});
 	});

@@ -176,7 +176,7 @@ describe('Remember shell', () => {
 	it('loads inherited deck settings and shows each value source', async () => {
 		const rootSettings = [
 			'---',
-			'remember-bury-siblings: false',
+			'remember-bury-siblings-enabled: false',
 			'---',
 			'',
 			'# Front',
@@ -226,7 +226,7 @@ describe('Remember shell', () => {
 		const mockApp = App.createConfigured__({
 			files: {
 				'Remember/Language/_remember.md':
-					'---\nremember-limit-new-cards-per-day: true\nremember-new-cards-per-day: 0\n---\n',
+					'---\nremember-new-cards-per-day-enabled: true\nremember-new-cards-per-day: 0\n---\n',
 				'Remember/Language/hola.md': cardNote('hola', 'hello'),
 			},
 		});

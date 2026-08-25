@@ -9,10 +9,10 @@ export const DECK_SETTINGS_FILE = '_remember.md';
 
 export const DECK_SETTING_PROPERTIES = {
 	desiredRetention: 'remember-desired-retention',
-	burySiblings: 'remember-bury-siblings',
-	limitNewCardsPerDay: 'remember-limit-new-cards-per-day',
+	burySiblings: 'remember-bury-siblings-enabled',
+	limitNewCardsPerDay: 'remember-new-cards-per-day-enabled',
 	newCardsPerDay: 'remember-new-cards-per-day',
-	learnAhead: 'remember-learn-ahead',
+	learnAhead: 'remember-learn-ahead-enabled',
 	learnAheadMinutes: 'remember-learn-ahead-minutes',
 } as const;
 

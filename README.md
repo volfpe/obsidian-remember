@@ -73,10 +73,10 @@ Add an optional `_remember.md` note to a deck folder to override settings for th
 ```yaml
 ---
 remember-desired-retention: 0.95
-remember-limit-new-cards-per-day: true
+remember-new-cards-per-day-enabled: true
 remember-new-cards-per-day: 10
-remember-bury-siblings: false
-remember-learn-ahead: true
+remember-bury-siblings-enabled: false
+remember-learn-ahead-enabled: true
 remember-learn-ahead-minutes: 5
 ---
 ```
