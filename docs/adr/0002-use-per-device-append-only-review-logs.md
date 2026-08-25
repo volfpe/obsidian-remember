@@ -8,7 +8,7 @@ Review history must live in the vault because sync services may ignore parts of 
 
 ## Decision
 
-Give each device a local ID and its own `reviews-<device-id>.rememberlog` file in the Remember root folder. Store one event per JSON line and append new events to the end of the device's log.
+Give each device a local ID and its own `<device-id>.rememberlog` file in the Remember root folder. Store one event per JSON line and append new events to the end of the device's log.
 
 Give each reversible event a unique ID. Undo an action by appending an event that references that ID.
 

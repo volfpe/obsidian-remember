@@ -91,4 +91,4 @@ When using Obsidian Sync, enable **Settings → Sync → Selective sync → Sync
 
 All data stays local in your vault. Remember makes no network requests.
 
-Review history is saved in `reviews-<device-id>.rememberlog` files in the Remember folder. The schedule is calculated from these files, so do not delete them.
+Review history is saved in `<device-id>.rememberlog` files in the Remember folder. The schedule is calculated from these files, so do not delete them.

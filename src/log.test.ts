@@ -55,19 +55,19 @@ describe('device id and append', () => {
 
 		await appendEvent(app, root, review);
 
-		expect(await app.vault.adapter.read(`${root}/reviews-${deviceId}.rememberlog`)).toBe(jsonl(review));
+		expect(await app.vault.adapter.read(`${root}/${deviceId}.rememberlog`)).toBe(jsonl(review));
 	});
 });
 
 describe('readEvents', () => {
-	it('reads only root-folder logs, skips one malformed line, and deduplicates events', async () => {
+	it('reads every root-folder .rememberlog, skips one malformed line, and deduplicates events', async () => {
 		const first = event('2026-08-11T09:14:03.120Z', 'card1');
 		const second = event('2026-08-11T09:15:03.120Z', 'card2', 1);
 		const mockApp = mockAppWithFiles();
 		const app = mockApp.asOriginalType__();
 		await writeFiles(mockApp, {
 			[`${root}/reviews-a.rememberlog`]: `${jsonl(first)}not json\n`,
-			[`${root}/reviews-b conflict.rememberlog`]: jsonl(first, second),
+			[`${root}/renamed history.rememberlog`]: jsonl(first, second),
 			'reviews-outside.rememberlog': jsonl(event('2026-08-11T09:16:03.120Z', 'ignored')),
 			[`${root}/unrelated.md`]: 'not a log',
 		});
@@ -88,9 +88,9 @@ describe('conflict cleanup', () => {
 		const other = event('2026-08-11T09:16:03.120Z', 'card3');
 		const mockApp = mockAppWithFiles();
 		const app = mockApp.asOriginalType__();
-		const ownPath = `${root}/reviews-${deviceId}.rememberlog`;
-		const conflictPath = `${root}/reviews-${deviceId} (conflict).rememberlog`;
-		const otherPath = 'reviews-otherdevice1.rememberlog';
+		const ownPath = `${root}/${deviceId}.rememberlog`;
+		const conflictPath = `${root}/${deviceId} (conflict).rememberlog`;
+		const otherPath = `${root}/other-device.rememberlog`;
 		await writeFiles(mockApp, {
 			[ownPath]: jsonl(first),
 			[conflictPath]: jsonl(first, second),
@@ -115,7 +115,7 @@ describe('conflict cleanup', () => {
 		await cleanOwnConflictCopies(app, root);
 
 		expect(await app.vault.adapter.read(legacyPath)).toBe(jsonl(first));
-		expect(await app.vault.adapter.exists(`${root}/reviews-${deviceId}.rememberlog`)).toBe(false);
+		expect(await app.vault.adapter.exists(`${root}/${deviceId}.rememberlog`)).toBe(false);
 	});
 });
 
@@ -125,7 +125,7 @@ describe('append-only undo', () => {
 		const second = event('2026-08-11T09:15:03.120Z', 'card2');
 		const mockApp = mockAppWithFiles();
 		const app = mockApp.asOriginalType__();
-		const path = `${root}/reviews-${deviceId}.rememberlog`;
+		const path = `${root}/${deviceId}.rememberlog`;
 		await writeFiles(mockApp, { [path]: jsonl(first, second) });
 
 		await appendUndoEvent(app, root, first.i);

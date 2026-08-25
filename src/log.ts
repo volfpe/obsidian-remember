@@ -1,4 +1,4 @@
-// Device id + the per-device append-only event logs (reviews-<deviceId>.rememberlog).
+// Device id + the per-device append-only event logs (<deviceId>.rememberlog).
 // These logs are the only scheduling store: no snapshot, no cache file, no database.
 // Events are written and read only inside the Remember root folder; logs anywhere
 // else are ignored. The root folder setting warns users to move the folder (and the
@@ -22,7 +22,7 @@ export function getDeviceId(app: App): string {
 }
 
 function ownLogName(app: App): string {
-	return `reviews-${getDeviceId(app)}${LOG_EXTENSION}`;
+	return `${getDeviceId(app)}${LOG_EXTENSION}`;
 }
 
 function ownLogPath(app: App, rootFolder: string): string {
@@ -123,7 +123,7 @@ export async function cleanOwnConflictCopies(app: App, rootFolder: string): Prom
 }
 
 function isLogFile(name: string): boolean {
-	return name.startsWith('reviews-') && name.endsWith(LOG_EXTENSION);
+	return name.endsWith(LOG_EXTENSION);
 }
 
 function parseLogEventLine(line: string): LogEvent | null {

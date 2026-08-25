@@ -80,7 +80,7 @@ describe('rating durability', () => {
 
 		await session.rate(Rating.Easy);
 
-		const [event] = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
+		const [event] = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
 			.trim()
 			.split('\n')
 			.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -97,7 +97,7 @@ describe('rating durability', () => {
 
 		await session.rate(Rating.Easy);
 
-		const [event] = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
+		const [event] = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
 			.trim()
 			.split('\n')
 			.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -202,7 +202,7 @@ describe('session progress', () => {
 
 		expect(session.current?.cardId).toBe('second');
 		expect(session.sessionCompleted).toBe(1);
-		const lines = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
+		const lines = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
 			.trim()
 			.split('\n')
 			.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -214,7 +214,7 @@ describe('session progress', () => {
 
 		expect(session.current?.cardId).toBe('first');
 		expect(session.sessionCompleted).toBe(0);
-		const finalLines = (await app.vault.adapter.read('Remember/reviews-device0000001.rememberlog'))
+		const finalLines = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
 			.trim()
 			.split('\n')
 			.map((line) => JSON.parse(line) as Record<string, unknown>);
@@ -301,7 +301,7 @@ describe('Practice mode', () => {
 		expect(session.current?.cardId).toBe('first');
 		expect(session.current?.state).toBe(realState);
 		expect(session.sessionCompleted).toBe(1);
-		expect(await app.vault.adapter.exists('Remember/reviews-device0000001.rememberlog')).toBe(false);
+		expect(await app.vault.adapter.exists('Remember/device0000001.rememberlog')).toBe(false);
 	});
 
 	it('renders temporary delays only for Again and Hard and offers no bury action', () => {
