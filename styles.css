@@ -1277,6 +1277,14 @@ button.remember-refresh.is-loading svg {
 	}
 }
 
+.is-mobile .remember-deck-study-actions.is-open button.remember-start-review {
+	border-end-start-radius: var(--button-radius, var(--input-radius));
+}
+
+.is-mobile .remember-deck-study-actions.is-open button.remember-start-options {
+	border-end-end-radius: var(--button-radius, var(--input-radius));
+}
+
 @container (width <= 650px) {
 	.remember-cards-page {
 		display: block;
