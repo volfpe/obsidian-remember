@@ -20,10 +20,8 @@ import {
 import {
 	buildQueue,
 	countDeckStats,
-	introducedTodaySiblingKeys,
 	manuallyBuriedCardIds,
 	returnsToCurrentSession,
-	reviewedTodaySiblingKeys,
 	selectCards,
 	type QueueItem,
 } from '../core/queue';
@@ -98,11 +96,10 @@ export class ReviewSession extends Component {
 		this.sessionSettings = snapshot.deckSettings.resolve(deck).values;
 		try {
 			const selection = selectCards(snapshot.cards, deck);
-			const { events, buries, states } = snapshot;
+			const { buries, states } = snapshot;
 			const now = snapshot.loadedAt;
 			const newCardsPerDay = effectiveNewCardsPerDay(this.sessionSettings);
-			const introducedToday = introducedTodaySiblingKeys(events, now);
-			const reviewedToday = reviewedTodaySiblingKeys(events, now);
+			const { introducedToday, reviewedToday } = snapshot;
 			const buriedCardIds = manuallyBuriedCardIds(buries, now);
 			const counts = countDeckStats(selection.kept, states, now, {
 				introducedToday,

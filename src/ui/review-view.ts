@@ -141,6 +141,7 @@ export class ReviewView extends ItemView {
 
 	onClose(): Promise<void> {
 		this.refreshGeneration++;
+		this.snapshotRepository.close();
 		this.cardsPage?.unload();
 		this.reviewSession?.unload();
 		this.contentTitleEl = null;

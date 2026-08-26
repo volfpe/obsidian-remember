@@ -72,6 +72,15 @@ function makeHarness(overrides: Partial<RememberSettings> = {}): {
 	return { app, finished, session };
 }
 
+async function storedLogLines(app: ReturnType<App['asOriginalType__']>): Promise<Record<string, unknown>[]> {
+	const path: unknown = app.loadLocalStorage('remember-active-log:Remember');
+	if (typeof path !== 'string') throw new Error('Expected an active review log');
+	return (await app.vault.adapter.read(path))
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe('rating durability', () => {
@@ -80,10 +89,7 @@ describe('rating durability', () => {
 
 		await session.rate(Rating.Easy);
 
-		const [event] = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
-			.trim()
-			.split('\n')
-			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		const [event] = await storedLogLines(app);
 		expect(event.dr).toBe(0.95);
 	});
 
@@ -97,10 +103,7 @@ describe('rating durability', () => {
 
 		await session.rate(Rating.Easy);
 
-		const [event] = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
-			.trim()
-			.split('\n')
-			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		const [event] = await storedLogLines(app);
 		expect(event.dr).toBe(0.95);
 	});
 
@@ -202,10 +205,7 @@ describe('session progress', () => {
 
 		expect(session.current?.cardId).toBe('second');
 		expect(session.sessionCompleted).toBe(1);
-		const lines = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
-			.trim()
-			.split('\n')
-			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		const lines = await storedLogLines(app);
 		expect(lines[0]).toMatchObject({ k: 'b', c: 'first' });
 		expect(lines[0]).not.toHaveProperty('s');
 		expect(new Date(String(lines[0].x)).getTime()).toBeGreaterThan(new Date(String(lines[0].t)).getTime());
@@ -214,10 +214,7 @@ describe('session progress', () => {
 
 		expect(session.current?.cardId).toBe('first');
 		expect(session.sessionCompleted).toBe(0);
-		const finalLines = (await app.vault.adapter.read('Remember/device0000001.rememberlog'))
-			.trim()
-			.split('\n')
-			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		const finalLines = await storedLogLines(app);
 		expect(finalLines[1]).toMatchObject({ k: 'u', u: lines[0].i });
 	});
 

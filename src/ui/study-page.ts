@@ -2,10 +2,8 @@ import { setIcon, setTooltip } from 'obsidian';
 import { hasPracticeCards } from '../core/practice';
 import {
 	countDeckStats,
-	introducedTodaySiblingKeys,
 	isDescendantDeck,
 	manuallyBuriedCardIds,
-	reviewedTodaySiblingKeys,
 	type DeckCounts,
 	type NoteCard,
 } from '../core/queue';
@@ -199,11 +197,13 @@ export function renderDeckStudyPage(
 	}
 	createStatus(status, STRINGS.review.counts.total, counts.total, 'total');
 
-	const forecast = forecastDeck(cards, snapshot.states, snapshot.events, now, {
+	const forecast = forecastDeck(cards, snapshot.states, [], now, {
 		days: 14,
 		newCardsPerDay: effectiveNewCardsPerDay(settings),
 		burySiblings: settings.burySiblings,
 		buries: snapshot.buries,
+		introducedToday: snapshot.introducedToday,
+		reviewedToday: snapshot.reviewedToday,
 	});
 	renderScheduleForecast(page, forecast);
 }
@@ -214,16 +214,14 @@ function deckCounts(
 	now: Date,
 ): DeckCounts {
 	const settings = snapshot.deckSettings.resolve(deck).values;
-	const introducedToday = introducedTodaySiblingKeys(snapshot.events, now);
-	const reviewedToday = reviewedTodaySiblingKeys(snapshot.events, now);
 	const buriedCardIds = manuallyBuriedCardIds(snapshot.buries, now);
 	return countDeckStats(
 		snapshot.cards.filter((card) => isDescendantDeck(card.deck, deck)),
 		snapshot.states,
 		now,
 		{
-			introducedToday,
-			reviewedToday,
+			introducedToday: snapshot.introducedToday,
+			reviewedToday: snapshot.reviewedToday,
 			manuallyBuriedCardIds: buriedCardIds,
 			newCardsPerDay: effectiveNewCardsPerDay(settings),
 			burySiblings: settings.burySiblings,

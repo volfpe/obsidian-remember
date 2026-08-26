@@ -1,6 +1,5 @@
-import { Rating, State, type Card as FsrsCard } from 'ts-fsrs';
+import { State, type Card as FsrsCard } from 'ts-fsrs';
 import { describe, expect, it } from 'vitest';
-import type { ReviewEvent } from '../../core/events';
 import type { NoteCard } from '../../core/queue';
 import { DeckSettingsIndex } from '../../deck-settings';
 import { DEFAULT_SETTINGS } from '../../settings';
@@ -22,26 +21,15 @@ function reviewState(due = '2026-08-20T10:00:00.000Z'): FsrsCard {
 	};
 }
 
-function event(id: string, timestamp: string, sub: number): ReviewEvent {
-	return {
-		v: 1,
-		k: 'r',
-		i: id,
-		t: timestamp,
-		c: 'card-one',
-		s: sub,
-		r: Rating.Good,
-		dr: 0.9,
-	};
-}
-
-function snapshot(cards: NoteCard[], events: ReviewEvent[] = []): RememberSnapshot {
+function snapshot(cards: NoteCard[]): RememberSnapshot {
 	return {
 		loadedAt: new Date('2026-08-15T12:00:00.000Z'),
 		cards,
-		events,
 		buries: [],
 		states: new Map([['card-one#0', reviewState()]]),
+		introducedToday: new Set(),
+		reviewedToday: new Set(),
+		reviewHistory: { getHistory: async () => ({ events: [], next: null }) },
 		deckSettings: new DeckSettingsIndex(DEFAULT_SETTINGS),
 		issues: { duplicates: [] },
 	};
@@ -64,20 +52,16 @@ describe('Cards catalog', () => {
 				],
 			},
 		];
-		const events = [
-			event('older', '2026-08-10T10:00:00.000Z', 0),
-			event('newer', '2026-08-15T10:00:00.000Z', 0),
-		];
-
+		const data = snapshot(cards);
+		data.reviewedToday.add('card-one#0');
 		const groups = buildCardDeckGroups(
-			snapshot(cards, events),
+			data,
 			'Language',
 			new Date('2026-08-15T12:00:00.000Z'),
 		);
 
 		expect(groups).toHaveLength(1);
 		expect(groups[0].items.map((item) => item.key)).toEqual(['card-one#0', 'card-one#1']);
-		expect(groups[0].items[0].history.map((review) => review.i)).toEqual(['newer', 'older']);
 		expect(cardStateKind(groups[0].items[0].state)).toBe('review');
 		expect(cardStateKind(groups[0].items[1].state)).toBe('new');
 		expect(groups[0].items.map((item) => item.availability)).toEqual(['scheduled', 'buried']);
@@ -105,7 +89,6 @@ describe('Cards catalog', () => {
 
 		expect(item.key).toBe('unstamped:geography.md:8:3');
 		expect(item.sibling).toEqual({ kind: 'cloze', number: 2 });
-		expect(item.history).toEqual([]);
 		expect(item.availability).toBe('new');
 	});
 

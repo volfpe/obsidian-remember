@@ -20,6 +20,8 @@ export interface ForecastOptions {
 	newCardsPerDay?: number;
 	burySiblings?: boolean;
 	buries?: BuryEvent[];
+	introducedToday?: ReadonlySet<string>;
+	reviewedToday?: ReadonlySet<string>;
 }
 
 /**
@@ -38,8 +40,8 @@ export function forecastDeck(
 	const newCardsPerDay = options.newCardsPerDay ?? Number.POSITIVE_INFINITY;
 	const burySiblings = options.burySiblings ?? true;
 	const buries = options.buries ?? [];
-	const introducedToday = introducedTodaySiblingKeys(events, now);
-	const reviewedToday = reviewedTodaySiblingKeys(events, now);
+	const introducedToday = options.introducedToday ?? introducedTodaySiblingKeys(events, now);
+	const reviewedToday = options.reviewedToday ?? reviewedTodaySiblingKeys(events, now);
 	let remaining = cards.map((card) => ({
 		...card,
 		siblings: [...card.siblings],

@@ -1,6 +1,11 @@
 import type { App, TFile } from 'obsidian';
 import type { Card as FsrsCard } from 'ts-fsrs';
-import { readCardEvents } from '../log';
+import {
+	getDeviceId,
+	listReviewLogFiles,
+	readReviewLogFile,
+	type ReviewLogFile,
+} from '../log';
 import {
 	ID_PROPERTY,
 	parseCardNote,
@@ -9,10 +14,9 @@ import {
 	TYPE_PROPERTY,
 	type ParsedCardNote,
 } from '../core/card-note';
-import type { BuryEvent, ReviewEvent } from '../core/events';
+import type { BuryEvent } from '../core/events';
 import { newCardId } from '../core/id';
 import { selectCards, type NoteCard } from '../core/queue';
-import { foldEventsByRetention } from '../core/scheduler';
 import {
 	DeckSettingsIndex,
 	isDeckSettingsPath,
@@ -21,6 +25,13 @@ import {
 } from '../deck-settings';
 import type { RememberSettings } from '../settings';
 import { parentPath } from '../vault-folders';
+import {
+	ReviewCache,
+	ReviewCacheError,
+	reviewCacheName,
+	type ReviewHistoryReader,
+	type SiblingProjectionRequest,
+} from '../cache/review-cache';
 
 export interface RememberSnapshotIssues {
 	duplicates: NoteCard[];
@@ -29,9 +40,11 @@ export interface RememberSnapshotIssues {
 export interface RememberSnapshot {
 	loadedAt: Date;
 	cards: NoteCard[];
-	events: ReviewEvent[];
 	buries: BuryEvent[];
 	states: Map<string, FsrsCard>;
+	introducedToday: Set<string>;
+	reviewedToday: Set<string>;
+	reviewHistory: ReviewHistoryReader;
 	deckSettings: DeckSettingsIndex;
 	issues: RememberSnapshotIssues;
 }
@@ -50,40 +63,130 @@ export function deckOfPath(path: string, rootFolder: string): string {
 
 /** Builds one consistent in-memory source for every non-session Remember page. */
 export class RememberSnapshotRepository {
+	private cachePromise: Promise<ReviewCache> | null = null;
+
 	constructor(
 		private app: App,
 		private settings: RememberSettings,
 	) {}
 
 	async load(): Promise<RememberSnapshot> {
+		try {
+			return await this.loadFromCache();
+		} catch (error) {
+			if (!(error instanceof ReviewCacheError)) throw error;
+			console.warn('Remember: rebuilding the local review cache', error);
+			await this.recreateCache();
+			return this.loadFromCache();
+		}
+	}
+
+	private async loadFromCache(): Promise<RememberSnapshot> {
 		const files = this.app.vault.getMarkdownFiles();
 		const deckSettings = this.scanDeckSettings(files);
-		const [cards, cardEvents] = await Promise.all([
+		const [cards, cache] = await Promise.all([
 			this.scanCards(files),
-			readCardEvents(this.app, this.settings.rootFolder),
+			this.reconciledCache(),
 		]);
-		const events = cardEvents.filter((event): event is ReviewEvent => event.k === 'r');
-		const buries = cardEvents.filter((event): event is BuryEvent => event.k === 'b');
 		const selection = selectCards(cards);
-		const decksByCardId = new Map(
-			selection.kept.flatMap((card) => (card.id === null ? [] : [[card.id, card.deck] as const])),
+		const projectionRequests: SiblingProjectionRequest[] = selection.kept.flatMap((card) =>
+			card.id === null
+				? []
+				: card.siblings.map((sibling) => ({
+						cardId: card.id!,
+						sub: sibling.sub,
+						desiredRetention: deckSettings.resolve(card.deck).values.desiredRetention,
+					})),
 		);
-		return {
-			loadedAt: new Date(),
-			cards: selection.kept,
-			events,
-			buries,
-			states: foldEventsByRetention(
-				events,
-				(cardId) =>
-					deckSettings.resolve(decksByCardId.get(cardId) ?? '').values.desiredRetention,
+		const loadedAt = new Date();
+		const [projection, buries] = await Promise.all([
+			cache.projection(
+				projectionRequests,
 				this.settings.rescheduleOnRetentionChange ? 'current' : 'review',
+				loadedAt,
 			),
+			cache.activeBuries(loadedAt),
+		]);
+		return {
+			loadedAt,
+			cards: selection.kept,
+			buries,
+			states: projection.states,
+			introducedToday: projection.introducedToday,
+			reviewedToday: projection.reviewedToday,
+			reviewHistory: cache,
 			deckSettings,
 			issues: {
 				duplicates: selection.dropped,
 			},
 		};
+	}
+
+	close(): void {
+		void this.cachePromise?.then(
+			(cache) => cache.close(),
+			() => undefined,
+		);
+		this.cachePromise = null;
+	}
+
+	private async reconciledCache(): Promise<ReviewCache> {
+		const cache = await this.openCache();
+		const [stored, current] = await Promise.all([
+			cache.storedFiles(),
+			listReviewLogFiles(this.app, this.settings.rootFolder),
+		]);
+		const currentByPath = new Map(current.map((file) => [file.path, file]));
+		for (const path of stored.keys()) {
+			if (!currentByPath.has(path)) return this.rebuildFromLogs(current);
+		}
+		for (const file of current) {
+			const previous = stored.get(file.path);
+			if (previous?.size === file.size && previous.mtime === file.mtime) continue;
+			const result = await cache.replaceFile(
+				file,
+				await readReviewLogFile(this.app, file.path),
+			);
+			if (result === 'rebuild') return this.rebuildFromLogs(current);
+		}
+		return cache;
+	}
+
+	private async rebuildFromLogs(files: ReviewLogFile[]): Promise<ReviewCache> {
+		const cache = await this.recreateCache();
+		for (const file of files) {
+			await cache.replaceFile(file, await readReviewLogFile(this.app, file.path));
+		}
+		return cache;
+	}
+
+	private openCache(): Promise<ReviewCache> {
+		this.cachePromise ??= ReviewCache.open(this.cacheName());
+		return this.cachePromise;
+	}
+
+	private async recreateCache(): Promise<ReviewCache> {
+		const previous = this.cachePromise;
+		this.cachePromise = null;
+		await previous?.then(
+			(cache) => cache.close(),
+			() => undefined,
+		);
+		const rebuilding = ReviewCache.recreate(this.cacheName());
+		this.cachePromise = rebuilding;
+		try {
+			return await rebuilding;
+		} catch (error) {
+			if (this.cachePromise === rebuilding) this.cachePromise = null;
+			throw error;
+		}
+	}
+
+	private cacheName(): string {
+		return reviewCacheName(
+			`${getDeviceId(this.app)}:${this.app.vault.getName()}`,
+			this.settings.rootFolder,
+		);
 	}
 
 	/**

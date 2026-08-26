@@ -137,6 +137,8 @@ export const STRINGS = {
 		back: 'Back',
 		history: 'Review history',
 		noHistory: 'This card has not been reviewed yet.',
+		loadMoreHistory: 'Load more',
+		historyFailed: 'Review history could not be loaded.',
 		openSource: (path: string) => `Open ${path}`,
 		dueNow: 'Now',
 		dueIn: (interval: string) => `In ${interval}`,

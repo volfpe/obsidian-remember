@@ -8,7 +8,7 @@ Review history must live in the vault because sync services may ignore parts of 
 
 ## Decision
 
-Give each device a local ID and its own `<device-id>.rememberlog` file in the Remember root folder. Store one event per JSON line and append new events to the end of the device's log.
+Give each device a local ID and a set of `<device-id>-<random-id>.rememberlog` files in the Remember root folder. Store one event per JSON line. Each device appends to one active log and starts a new one before the active log grows too large.
 
 Give each reversible event a unique ID. Undo an action by appending an event that references that ID.
 
@@ -20,6 +20,6 @@ Devices do not overwrite each other's review history.
 
 Undo remains safe after synchronization because it is also append-only.
 
-Logs grow over time. Reviews for deleted cards stay in the logs but cause no problem.
+The number of logs grows over time. Reviews for deleted cards stay in the logs but cause no problem.
 
 Obsidian Sync users must enable **Sync all other types** on every device because `.rememberlog` is a custom file type.

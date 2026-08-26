@@ -1,6 +1,7 @@
 import { App } from 'obsidian-test-mocks/obsidian';
 import { State, type Card as FsrsCard } from 'ts-fsrs';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import type { ReviewEvent } from '../../core/events';
 import type { NoteCard } from '../../core/queue';
 import { DeckSettingsIndex } from '../../deck-settings';
 import { DEFAULT_SETTINGS } from '../../settings';
@@ -26,9 +27,11 @@ function snapshot(): RememberSnapshot {
 	return {
 		loadedAt: new Date('2026-08-15T12:00:00.000Z'),
 		cards,
-		events: [],
 		buries: [],
 		states: new Map(),
+		introducedToday: new Set(),
+		reviewedToday: new Set(),
+		reviewHistory: { getHistory: async () => ({ events: [], next: null }) },
 		deckSettings: new DeckSettingsIndex(DEFAULT_SETTINGS),
 		issues: { duplicates: [] },
 	};
@@ -44,7 +47,11 @@ function emulateBrowserScrollClamping(): () => void {
 			return positions.get(this) ?? 0;
 		},
 		set(this: Element, value: number) {
-			positions.set(this, this.childElementCount === 0 ? 0 : value);
+			const hasScrollableContent = this.querySelector(
+				'.remember-card-row, .remember-card-row-spacer',
+			);
+			const displayed = getComputedStyle(this).display !== 'none';
+			positions.set(this, hasScrollableContent && displayed ? value : 0);
 		},
 	});
 	return () => Object.defineProperty(Element.prototype, 'scrollTop', descriptor);
@@ -119,6 +126,126 @@ describe('Cards page', () => {
 
 		expect(container.querySelector('.remember-card-row .remember-card-due')?.textContent).toBe('Now');
 		expect(container.querySelector('.remember-card-metadata')?.textContent).toContain('DueNow');
+		page.unload();
+	});
+
+	it('queries and pages only the selected sibling history', async () => {
+		const app = App.createConfigured__().asOriginalType__();
+		const page = new CardsPage(app);
+		const container = createDiv();
+		const data = snapshot();
+		const newest: ReviewEvent = {
+			v: 1,
+			k: 'r',
+			i: 'newest',
+			t: '2026-08-15T10:00:00.000Z',
+			c: 'first-card',
+			s: 0,
+			r: 3,
+			dr: 0.9,
+		};
+		const older = { ...newest, i: 'older', t: '2026-08-14T10:00:00.000Z', r: 1 as const };
+		const getHistory = vi
+			.fn()
+			.mockResolvedValueOnce({ events: [newest], next: { t: newest.t, i: newest.i } })
+			.mockResolvedValueOnce({ events: [older], next: null });
+		data.reviewHistory = { getHistory };
+
+		page.render(container, data, 'Language');
+		await vi.waitFor(() => expect(container.querySelector('.remember-card-history')?.textContent).toContain('Good'));
+		expect(getHistory).toHaveBeenCalledWith('first-card', 0);
+
+		container.querySelector<HTMLButtonElement>('.remember-card-history-more')?.click();
+		await vi.waitFor(() => expect(container.querySelector('.remember-card-history')?.textContent).toContain('Again'));
+		expect(getHistory).toHaveBeenLastCalledWith(
+			'first-card',
+			0,
+			50,
+			{ t: newest.t, i: newest.i },
+		);
+		page.unload();
+	});
+
+	it('renders only a bounded window of a large card list', () => {
+		const app = App.createConfigured__().asOriginalType__();
+		const page = new CardsPage(app);
+		const container = createDiv();
+		const data = snapshot();
+		data.cards = Array.from({ length: 500 }, (_, index): NoteCard => ({
+			...data.cards[0],
+			id: `card-${index}`,
+			path: `language/card-${index}.md`,
+			siblings: [{ sub: 0, front: `front ${index}`, back: `back ${index}` }],
+		}));
+
+		page.render(container, data, 'Language');
+
+		expect(container.querySelectorAll('.remember-card-row').length).toBeLessThan(100);
+		expect(container.querySelector('.remember-card-row-spacer')).not.toBeNull();
+		page.unload();
+	});
+
+	it('restores list scroll after leaving a hidden mobile detail', () => {
+		const restoreScrollTop = emulateBrowserScrollClamping();
+		onTestFinished(restoreScrollTop);
+		const realGetComputedStyle = window.getComputedStyle.bind(window);
+		const computedStyle = vi.spyOn(window, 'getComputedStyle').mockImplementation((element) =>
+			element.matches('.remember-cards-page.is-detail .remember-card-list')
+				? ({ display: 'none' } as CSSStyleDeclaration)
+				: realGetComputedStyle(element),
+		);
+		onTestFinished(() => computedStyle.mockRestore());
+		const app = App.createConfigured__().asOriginalType__();
+		const page = new CardsPage(app);
+		const container = createDiv();
+		const data = snapshot();
+		data.cards = Array.from({ length: 500 }, (_, index): NoteCard => ({
+			...data.cards[0],
+			id: `card-${index}`,
+			path: `language/card-${index}.md`,
+			siblings: [{ sub: 0, front: `front ${index}`, back: `back ${index}` }],
+		}));
+
+		page.render(container, data, 'Language');
+		const list = container.querySelector<HTMLElement>('.remember-card-list')!;
+		list.scrollTop = 5_200;
+		container.querySelector<HTMLButtonElement>('.remember-card-row')!.click();
+
+		expect(container.querySelector<HTMLElement>('.remember-card-list')?.scrollTop).toBe(0);
+		container.querySelector<HTMLButtonElement>('.remember-card-detail-back')!.click();
+		expect(container.querySelector<HTMLElement>('.remember-card-list')?.scrollTop).toBe(5_200);
+		page.unload();
+	});
+
+	it('ignores a queued scroll render after the list is replaced', () => {
+		const frames: FrameRequestCallback[] = [];
+		const animationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+			frames.push(callback);
+			return frames.length;
+		});
+		onTestFinished(() => animationFrame.mockRestore());
+		const app = App.createConfigured__().asOriginalType__();
+		const page = new CardsPage(app);
+		const container = createDiv();
+		const data = snapshot();
+		data.cards = Array.from({ length: 500 }, (_, index): NoteCard => ({
+			...data.cards[0],
+			id: `card-${index}`,
+			path: `language/card-${index}.md`,
+			siblings: [{ sub: 0, front: `front ${index}`, back: `back ${index}` }],
+		}));
+
+		page.render(container, data, 'Language');
+		const oldList = container.querySelector<HTMLElement>('.remember-card-list')!;
+		oldList.scrollTop = 5_200;
+		oldList.dispatchEvent(new Event('scroll'));
+		expect(frames).toHaveLength(1);
+		container.querySelector<HTMLButtonElement>('.remember-card-row')!.click();
+		oldList.scrollTop = 0;
+		frames[0](0);
+
+		container.querySelector<HTMLButtonElement>('.remember-card-detail-back')!.click();
+		expect(container.querySelector<HTMLElement>('.remember-card-list')?.scrollTop).toBe(5_200);
 		page.unload();
 	});
 });

@@ -1,12 +1,9 @@
 import { State, type Card as FsrsCard } from 'ts-fsrs';
-import type { ReviewEvent } from '../../core/events';
 import {
 	classifyDeckSiblings,
-	introducedTodaySiblingKeys,
 	isDescendantDeck,
 	manuallyBuriedCardIds,
 	noteSiblingKey,
-	reviewedTodaySiblingKeys,
 	type CardAvailability,
 } from '../../core/queue';
 import { siblingKey } from '../../core/scheduler';
@@ -15,6 +12,7 @@ import type { RememberSnapshot } from '../remember-snapshot';
 
 export interface CardListItem {
 	key: string;
+	cardId: string | null;
 	deck: string;
 	path: string;
 	line: number;
@@ -24,7 +22,6 @@ export interface CardListItem {
 	sibling: { kind: 'forward' | 'reverse' } | { kind: 'cloze'; number: number };
 	availability: CardAvailability;
 	state: FsrsCard | null;
-	history: ReviewEvent[];
 }
 
 export interface CardDeckGroup {
@@ -40,23 +37,12 @@ export function buildCardDeckGroups(
 	const settings = snapshot.deckSettings.resolve(selectedDeck).values;
 	const cards = snapshot.cards.filter((card) => isDescendantDeck(card.deck, selectedDeck));
 	const availability = classifyDeckSiblings(cards, snapshot.states, now, {
-		introducedToday: introducedTodaySiblingKeys(snapshot.events, now),
-		reviewedToday: reviewedTodaySiblingKeys(snapshot.events, now),
+		introducedToday: snapshot.introducedToday,
+		reviewedToday: snapshot.reviewedToday,
 		manuallyBuriedCardIds: manuallyBuriedCardIds(snapshot.buries, now),
 		newCardsPerDay: effectiveNewCardsPerDay(settings),
 		burySiblings: settings.burySiblings,
 	});
-	const eventsBySibling = new Map<string, ReviewEvent[]>();
-	for (const event of snapshot.events) {
-		const key = siblingKey(event.c, event.s);
-		const events = eventsBySibling.get(key);
-		if (events) events.push(event);
-		else eventsBySibling.set(key, [event]);
-	}
-	for (const events of eventsBySibling.values()) {
-		events.sort((a, b) => (a.t < b.t ? 1 : a.t > b.t ? -1 : 0));
-	}
-
 	const items: CardListItem[] = [];
 	for (const card of cards) {
 		for (const sibling of card.siblings) {
@@ -68,6 +54,7 @@ export function buildCardDeckGroups(
 				(state === null ? 'new' : state.due.getTime() <= now.getTime() ? 'due' : 'scheduled');
 			items.push({
 				key,
+				cardId: card.id,
 				deck: card.deck,
 				path: card.path,
 				line: card.line,
@@ -82,7 +69,6 @@ export function buildCardDeckGroups(
 							: { kind: 'reverse' },
 				availability: currentAvailability,
 				state,
-				history: persistedKey === null ? [] : (eventsBySibling.get(persistedKey) ?? []),
 			});
 		}
 	}

@@ -5,11 +5,11 @@ import {
 	setTooltip,
 	type App,
 } from 'obsidian';
-import { Rating, type Grade } from 'ts-fsrs';
 import { formatInterval } from '../../core/scheduler';
 import { STRINGS } from '../../i18n';
 import type { RememberSnapshot } from '../remember-snapshot';
 import { openCardDefinition } from '../open-card-definition';
+import { CardHistoryView } from './card-history-view';
 import {
 	buildCardDeckGroups,
 	cardStateKind,
@@ -18,13 +18,17 @@ import {
 } from './cards-model';
 
 export class CardsPage {
+	private static readonly rowHeight = 52;
+	private static readonly rowOverscan = 12;
 	private parent: HTMLElement | null = null;
 	private groups: CardDeckGroup[] = [];
 	private selectedKey: string | null = null;
 	private showDetail = false;
 	private listScrollTop = 0;
+	private listGeneration = 0;
 	private now = new Date();
 	private renderer = new Component();
+	private history = new CardHistoryView();
 
 	constructor(private app: App) {
 		this.renderer.load();
@@ -37,6 +41,7 @@ export class CardsPage {
 	): void {
 		this.parent = parent;
 		this.now = new Date();
+		this.history.reset(snapshot.reviewHistory);
 		this.groups = buildCardDeckGroups(snapshot, selectedDeck, this.now);
 		const items = this.groups.flatMap((group) => group.items);
 		if (!items.some((item) => item.key === this.selectedKey)) {
@@ -48,14 +53,17 @@ export class CardsPage {
 	}
 
 	unload(): void {
+		this.listGeneration++;
 		this.renderer.unload();
 		this.parent = null;
 		this.groups = [];
+		this.history.unload();
 	}
 
 	private renderCurrent(): void {
 		const parent = this.parent;
 		if (!parent) return;
+		const generation = ++this.listGeneration;
 		this.resetRenderer();
 		parent.empty();
 		const page = parent.createDiv({ cls: 'remember-cards-page' });
@@ -68,40 +76,75 @@ export class CardsPage {
 
 		const list = page.createDiv({ cls: 'remember-card-list' });
 		const rows = list.createDiv({ cls: 'remember-card-rows' });
-		this.renderRows(rows, items);
-		list.scrollTop = this.listScrollTop;
+		this.renderRows(rows, items, list, generation);
 		const selected = items.find((item) => item.key === this.selectedKey) ?? items[0];
 		this.renderDetail(page, selected);
 	}
 
-	private renderRows(rows: HTMLElement, items: CardListItem[]): void {
-		for (const item of items) {
-			const row = rows.createEl('button', { cls: 'remember-card-row' });
-			const selected = item.key === this.selectedKey;
-			row.toggleClass('is-selected', selected);
-			row.setAttribute('aria-current', selected ? 'true' : 'false');
-			const copy = row.createSpan({ cls: 'remember-card-row-copy' });
-			copy.createSpan({ cls: 'remember-card-row-front', text: preview(item.front) });
-			copy.createSpan({
-				cls: 'remember-card-row-source',
-				text: `${baseName(item.path)} · ${siblingLabel(item)}`,
-			});
-			const availabilityElement = row.createSpan({
-				cls: `remember-card-availability remember-card-availability-${item.availability}`,
-				text: STRINGS.cards.availability[item.availability],
-			});
-			setTooltip(
-				availabilityElement,
-				STRINGS.cards.availabilityDescriptions[item.availability],
+	private renderRows(
+		rows: HTMLElement,
+		items: CardListItem[],
+		list: HTMLElement,
+		generation: number,
+	): void {
+		const renderVisible = (scrollTop = list.scrollTop) => {
+			this.listScrollTop = scrollTop;
+			const first = Math.max(
+				0,
+				Math.floor(scrollTop / CardsPage.rowHeight) - CardsPage.rowOverscan,
 			);
-			row.createSpan({ cls: 'remember-card-due', text: dueLabel(item, this.now) });
-			row.addEventListener('click', () => {
-				this.listScrollTop = rows.parentElement?.scrollTop ?? 0;
-				this.selectedKey = item.key;
-				this.showDetail = true;
-				this.renderCurrent();
-			});
+			const visible = Math.ceil((list.clientHeight || 600) / CardsPage.rowHeight);
+			const end = Math.min(items.length, first + visible + CardsPage.rowOverscan * 2);
+			rows.empty();
+			if (first > 0) createRowSpacer(rows, first * CardsPage.rowHeight);
+			for (const item of items.slice(first, end)) this.renderRow(rows, item);
+			if (end < items.length) createRowSpacer(rows, (items.length - end) * CardsPage.rowHeight);
+		};
+		const savedScrollTop = this.listScrollTop;
+		renderVisible(savedScrollTop);
+		list.scrollTop = savedScrollTop;
+		if (list.scrollTop !== savedScrollTop && isDisplayed(list)) {
+			renderVisible(list.scrollTop);
 		}
+		let scheduled = false;
+		list.addEventListener('scroll', () => {
+			if (scheduled) return;
+			scheduled = true;
+			(list.ownerDocument.defaultView ?? window).requestAnimationFrame(() => {
+				scheduled = false;
+				if (generation !== this.listGeneration) return;
+				renderVisible();
+			});
+		});
+	}
+
+	private renderRow(rows: HTMLElement, item: CardListItem): void {
+		const row = rows.createEl('button', { cls: 'remember-card-row' });
+		const selected = item.key === this.selectedKey;
+		row.toggleClass('is-selected', selected);
+		row.setAttribute('aria-current', selected ? 'true' : 'false');
+		const copy = row.createSpan({ cls: 'remember-card-row-copy' });
+		copy.createSpan({ cls: 'remember-card-row-front', text: preview(item.front) });
+		copy.createSpan({
+			cls: 'remember-card-row-source',
+			text: `${baseName(item.path)} · ${siblingLabel(item)}`,
+		});
+		const availabilityElement = row.createSpan({
+			cls: `remember-card-availability remember-card-availability-${item.availability}`,
+			text: STRINGS.cards.availability[item.availability],
+		});
+		setTooltip(
+			availabilityElement,
+			STRINGS.cards.availabilityDescriptions[item.availability],
+		);
+		row.createSpan({ cls: 'remember-card-due', text: dueLabel(item, this.now) });
+		row.addEventListener('click', () => {
+			this.listScrollTop = rows.parentElement?.scrollTop ?? 0;
+			if (this.selectedKey !== item.key) this.history.clear();
+			this.selectedKey = item.key;
+			this.showDetail = true;
+			this.renderCurrent();
+		});
 	}
 
 	private renderDetail(parent: HTMLElement, item: CardListItem): void {
@@ -144,8 +187,7 @@ export class CardsPage {
 
 		this.renderSide(scroll, STRINGS.cards.front, item.front, item.path);
 		this.renderSide(scroll, STRINGS.cards.back, item.back, item.path);
-		this.renderHistory(scroll, item);
-
+		this.history.render(scroll, item);
 	}
 
 	private createSourceMetadata(parent: HTMLElement, card: CardListItem): void {
@@ -173,30 +215,21 @@ export class CardsPage {
 		void MarkdownRenderer.render(this.app, markdown, content, path, this.renderer);
 	}
 
-	private renderHistory(parent: HTMLElement, item: CardListItem): void {
-		const section = parent.createEl('section', { cls: 'remember-card-detail-section' });
-		section.createEl('h3', { text: STRINGS.cards.history });
-		if (item.history.length === 0) {
-			section.createEl('p', { cls: 'remember-card-history-empty', text: STRINGS.cards.noHistory });
-			return;
-		}
-		const list = section.createEl('ol', { cls: 'remember-card-history' });
-		const formatter = new Intl.DateTimeFormat(undefined, {
-			dateStyle: 'medium',
-			timeStyle: 'short',
-		});
-		for (const event of item.history) {
-			const row = list.createEl('li');
-			row.createSpan({ text: formatter.format(new Date(event.t)) });
-			row.createSpan({ cls: `remember-history-rating remember-history-rating-${event.r}`, text: ratingLabel(event.r) });
-		}
-	}
-
 	private resetRenderer(): void {
 		this.renderer.unload();
 		this.renderer = new Component();
 		this.renderer.load();
 	}
+}
+
+function createRowSpacer(parent: HTMLElement, height: number): void {
+	const spacer = parent.createDiv({ cls: 'remember-card-row-spacer' });
+	spacer.style.height = `${height}px`;
+}
+
+function isDisplayed(element: HTMLElement): boolean {
+	const view = element.ownerDocument.defaultView;
+	return view === null || view.getComputedStyle(element).display !== 'none';
 }
 
 function createMetadata(parent: HTMLElement, label: string, value: string): HTMLElement {
@@ -214,13 +247,6 @@ function dueLabel(item: CardListItem, now: Date): string {
 	if (item.state === null) return STRINGS.cards.notScheduled;
 	if (item.state.due.getTime() <= now.getTime()) return STRINGS.cards.dueNow;
 	return STRINGS.cards.dueIn(formatInterval(now, item.state.due));
-}
-
-function ratingLabel(rating: Grade): string {
-	if (rating === Rating.Again) return STRINGS.review.ratings.again;
-	if (rating === Rating.Hard) return STRINGS.review.ratings.hard;
-	if (rating === Rating.Easy) return STRINGS.review.ratings.easy;
-	return STRINGS.review.ratings.good;
 }
 
 function preview(markdown: string): string {

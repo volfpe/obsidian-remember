@@ -4,8 +4,8 @@ import type { BuryEvent, ReviewEvent } from './core/events';
 import {
 	appendEvent,
 	appendUndoEvent,
-	cleanOwnConflictCopies,
 	getDeviceId,
+	MAX_LOG_BYTES,
 	readCardEvents,
 	readEvents,
 } from './log';
@@ -55,7 +55,23 @@ describe('device id and append', () => {
 
 		await appendEvent(app, root, review);
 
-		expect(await app.vault.adapter.read(`${root}/${deviceId}.rememberlog`)).toBe(jsonl(review));
+		const files = (await app.vault.adapter.list(root)).files;
+		expect(files).toHaveLength(1);
+		expect(files[0]).toMatch(new RegExp(`^${root}/${deviceId}-[0-9a-z]{13}\\.rememberlog$`));
+		expect(await app.vault.adapter.read(files[0])).toBe(jsonl(review));
+	});
+
+	it('starts a new random log instead of appending past the size limit', async () => {
+		const active = `${root}/${deviceId}-active.rememberlog`;
+		const mockApp = mockAppWithFiles({ [active]: 'x'.repeat(MAX_LOG_BYTES) });
+		mockApp.saveLocalStorage(`remember-active-log:${root}`, active);
+		const app = mockApp.asOriginalType__();
+
+		await appendEvent(app, root, event('2026-08-11T09:14:03.120Z', 'card1'));
+
+		const files = (await app.vault.adapter.list(root)).files;
+		expect(files).toHaveLength(2);
+		expect(await app.vault.adapter.read(active)).toHaveLength(MAX_LOG_BYTES);
 	});
 });
 
@@ -78,45 +94,6 @@ describe('readEvents', () => {
 		expect(reviews).toEqual([first, second]);
 		expect(warning).toHaveBeenCalledOnce();
 	});
-
-});
-
-describe('conflict cleanup', () => {
-	it('merges only own missing lines into the root-folder log and leaves other devices alone', async () => {
-		const first = event('2026-08-11T09:14:03.120Z', 'card1');
-		const second = event('2026-08-11T09:15:03.120Z', 'card2');
-		const other = event('2026-08-11T09:16:03.120Z', 'card3');
-		const mockApp = mockAppWithFiles();
-		const app = mockApp.asOriginalType__();
-		const ownPath = `${root}/${deviceId}.rememberlog`;
-		const conflictPath = `${root}/${deviceId} (conflict).rememberlog`;
-		const otherPath = `${root}/other-device.rememberlog`;
-		await writeFiles(mockApp, {
-			[ownPath]: jsonl(first),
-			[conflictPath]: jsonl(first, second),
-			[otherPath]: jsonl(other),
-		});
-		vi.spyOn(console, 'log').mockImplementation(() => undefined);
-
-		await cleanOwnConflictCopies(app, root);
-
-		expect(await app.vault.adapter.read(ownPath)).toBe(jsonl(first, second));
-		expect(await app.vault.adapter.exists(conflictPath)).toBe(false);
-		expect(await app.vault.adapter.read(otherPath)).toBe(jsonl(other));
-	});
-
-	it('leaves history with the own name in an old location untouched', async () => {
-		const first = event('2026-08-11T09:14:03.120Z', 'card1');
-		const mockApp = mockAppWithFiles();
-		const app = mockApp.asOriginalType__();
-		const legacyPath = `reviews-${deviceId}.rememberlog`;
-		await writeFiles(mockApp, { [legacyPath]: jsonl(first) });
-
-		await cleanOwnConflictCopies(app, root);
-
-		expect(await app.vault.adapter.read(legacyPath)).toBe(jsonl(first));
-		expect(await app.vault.adapter.exists(`${root}/${deviceId}.rememberlog`)).toBe(false);
-	});
 });
 
 describe('append-only undo', () => {
@@ -125,14 +102,16 @@ describe('append-only undo', () => {
 		const second = event('2026-08-11T09:15:03.120Z', 'card2');
 		const mockApp = mockAppWithFiles();
 		const app = mockApp.asOriginalType__();
-		const path = `${root}/${deviceId}.rememberlog`;
+		const path = `${root}/${deviceId}-legacy.rememberlog`;
 		await writeFiles(mockApp, { [path]: jsonl(first, second) });
 
 		await appendUndoEvent(app, root, first.i);
 
-		const lines = (await app.vault.adapter.read(path)).trim().split('\n');
-		expect(lines).toHaveLength(3);
-		expect(JSON.parse(lines[2])).toMatchObject({ v: 1, k: 'u', u: first.i });
+		const active = mockApp.loadLocalStorage(`remember-active-log:${root}`);
+		expect(typeof active).toBe('string');
+		const lines = (await app.vault.adapter.read(active as string)).trim().split('\n');
+		expect(lines).toHaveLength(1);
+		expect(JSON.parse(lines[0])).toMatchObject({ v: 1, k: 'u', u: first.i });
 		expect(await readEvents(app, root)).toEqual([second]);
 	});
 

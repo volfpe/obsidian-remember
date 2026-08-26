@@ -1,6 +1,5 @@
 import { Plugin, type App } from 'obsidian';
 import { STRINGS } from './i18n';
-import { cleanOwnConflictCopies } from './log';
 // One-time card-format migrations; delete these imports with src/migration/.
 import { hideTokens } from './migration/hide-tokens';
 import { CardMigrations } from './migration/card-migrations';
@@ -49,11 +48,6 @@ export default class RememberPlugin extends Plugin {
 		});
 		this.addSettingTab(new RememberSettingTab(this.app, this));
 		this.registerEditorExtension(hideTokens);
-		this.app.workspace.onLayoutReady(() => {
-			cleanOwnConflictCopies(this.app, this.settings.rootFolder).catch((error) =>
-				console.error('Remember: sync-conflict cleanup failed', error),
-			);
-		});
 	}
 
 	async openReview(): Promise<void> {

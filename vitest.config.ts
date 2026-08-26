@@ -7,6 +7,6 @@ export default defineConfig({
 	},
 	test: {
 		environment: 'jsdom',
-		setupFiles: ['obsidian-test-mocks/vitest-setup'],
+		setupFiles: ['fake-indexeddb/auto', 'obsidian-test-mocks/vitest-setup'],
 	},
 });

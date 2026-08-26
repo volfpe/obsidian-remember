@@ -25,9 +25,11 @@ function snapshot(settings = { ...DEFAULT_SETTINGS }): RememberSnapshot {
 	return {
 		loadedAt: now,
 		cards,
-		events: [],
 		buries: [],
 		states: new Map(),
+		introducedToday: new Set(),
+		reviewedToday: new Set(),
+		reviewHistory: { getHistory: async () => ({ events: [], next: null }) },
 		deckSettings: new DeckSettingsIndex(settings),
 		issues: { duplicates: [] },
 	};
