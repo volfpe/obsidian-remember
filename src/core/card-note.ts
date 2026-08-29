@@ -145,24 +145,27 @@ function parseClozeBody(
 	const line = markers[0]?.line ?? firstContentLine(lines, start, lines.length - 1) ?? start;
 	if (malformed || markers.length === 0) return { siblings: [], line };
 
-	const revealed = renderCloze(lines, start, markers);
 	const numbers = [...new Set(markers.map((marker) => marker.number))].sort((a, b) => a - b);
 	return {
 		siblings: numbers.map((number) => ({
 			sub: number + 1,
 			front: renderCloze(lines, start, markers, number),
-			back: revealed,
+			back: renderCloze(lines, start, markers, undefined, number),
 		})),
 		line,
 	};
 }
 
-/** The whole body with each marker replaced by its answer, or by […] when its number is hidden. */
+/**
+ * The whole body with each marker replaced by its answer, or by […] when its number is hidden.
+ * `revealed` marks the number being tested so the answer side can highlight what was hidden.
+ */
 function renderCloze(
 	lines: readonly MarkdownLine[],
 	start: number,
 	markers: readonly ClozeMarker[],
 	hidden?: number,
+	revealed?: number,
 ): string {
 	const rendered: string[] = [];
 	for (let i = start; i < lines.length; i++) {
@@ -172,7 +175,9 @@ function renderCloze(
 		let cursor = 0;
 		for (const marker of own) {
 			result += raw.slice(cursor, marker.start);
-			result += marker.number === hidden ? '[…]' : marker.answer;
+			if (marker.number === hidden) result += '[…]';
+			else if (marker.number === revealed) result += `==${marker.answer}==`;
+			else result += marker.answer;
 			cursor = marker.end;
 		}
 		rendered.push(result + raw.slice(cursor));

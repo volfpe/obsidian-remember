@@ -36,6 +36,7 @@ function item(cardId: string): QueueItem {
 		deck: '',
 		cardId,
 		sub: 0,
+		kind: 'basic',
 		front: `front of ${cardId}`,
 		back: `back of ${cardId}`,
 		state: null,
