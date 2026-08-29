@@ -83,8 +83,8 @@ describe('cloze card notes', () => {
 
 		expect(card.kind).toBe('cloze');
 		expect(card.siblings).toEqual([
-			{ sub: 2, front: 'The capital of […]\nis Paris.', back: 'The capital of France\nis Paris.' },
-			{ sub: 3, front: 'The capital of France\nis […].', back: 'The capital of France\nis Paris.' },
+			{ sub: 2, front: 'The capital of […]\nis Paris.', back: 'The capital of ==France==\nis Paris.' },
+			{ sub: 3, front: 'The capital of France\nis […].', back: 'The capital of France\nis ==Paris==.' },
 		]);
 	});
 
@@ -100,7 +100,7 @@ describe('cloze card notes', () => {
 	it('ignores cloze syntax inside code but keeps code answers', () => {
 		expect(parseCardNote('Use `==c1:x==` here', { 'remember-type': 'cloze' }).siblings).toEqual([]);
 		const card = parseCardNote('Call ==c1:`console.log()`== to print.', { 'remember-type': 'cloze' });
-		expect(card.siblings[0].back).toBe('Call `console.log()` to print.');
+		expect(card.siblings[0].back).toBe('Call ==`console.log()`== to print.');
 	});
 
 	it('produces no siblings for missing or malformed clozes', () => {

@@ -262,9 +262,16 @@ export class ReviewSession extends Component {
 		const review = this.container.createDiv({ cls: 'remember-review' });
 		this.renderSessionHeader(review);
 		const card = review.createDiv({ cls: 'remember-card-scroll' });
-		this.renderSide(card, this.current.front);
-		card.createEl('hr', { cls: 'remember-divider' });
-		this.renderSide(card, this.current.back);
+		// A cloze answer is the same body with the gap filled in: repeating the question above it
+		// duplicates the whole passage and pushes the answer out of view. Basic cards keep the
+		// question in sight because their two sides carry different text.
+		if (this.current.kind === 'cloze') {
+			this.renderSide(card, this.current.back);
+		} else {
+			this.renderSide(card, this.current.front);
+			card.createEl('hr', { cls: 'remember-divider' });
+			this.renderSide(card, this.current.back);
+		}
 
 		const now = new Date();
 		const previews =

@@ -38,6 +38,8 @@ export interface QueueItem {
 	line: number;
 	deck: string;
 	cardId: string;
+	/** Card kind of the owning note; decides how the answer side is laid out. */
+	kind: CardKind;
 	/** Stable sibling index supplied by the parsed card. */
 	sub: number;
 	/** Markdown rendered for this sibling's question and answer. */
@@ -85,6 +87,7 @@ interface AvailableSibling {
 	groupKey: string;
 	key: string | null;
 	sub: number;
+	kind: CardKind;
 	front: string;
 	back: string;
 	state: FsrsCard | null;
@@ -192,6 +195,7 @@ function allSiblings(
 				groupKey: card.id === null ? `unstamped:${card.path}:${card.line}` : `card:${card.id}`,
 				key,
 				sub,
+				kind: card.kind,
 				front: sibling.front,
 				back: sibling.back,
 				state,
@@ -402,6 +406,7 @@ export function buildQueue(
 			deck: sibling.card.deck,
 			cardId,
 			sub: sibling.sub,
+			kind: sibling.kind,
 			front: sibling.front,
 			back: sibling.back,
 			state: sibling.state,

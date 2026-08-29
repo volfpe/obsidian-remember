@@ -54,6 +54,7 @@ function* eligiblePracticeItems(
 				deck: card.deck,
 				cardId: card.id,
 				sub: sibling.sub,
+				kind: card.kind,
 				front: sibling.front,
 				back: sibling.back,
 				state,
